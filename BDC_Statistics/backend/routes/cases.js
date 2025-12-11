@@ -380,9 +380,17 @@ export const getStatisticsHandler = async (req, res) => {
         // 从数据库查询真实的收件人统计数据 - 简化查询，避免参数问题
         let receiverQuery, receiverParams;
         // 所有角色都能看到所有收件人和国资企业专窗的收件数，用于对比
-        // 移除WHERE条件，让所有角色都能看到完整的收件人统计
-        receiverQuery = 'SELECT u.real_name as receiver, COUNT(*) as total_count, COUNT(*) as completed_count, 0 as pending_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as general_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as developer_transfer_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as transfer_developer_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as state_owned_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as multi_transfer_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as complex_count FROM cases c JOIN users u ON c.receiver_id = u.id GROUP BY u.real_name ORDER BY total_count DESC';
-        receiverParams = ['一般件', '开发商转移', '%转移%', '%国资%', '%分割%', '其他'];
+        // 对于收件人角色，统计数据应包含被分配的案件和自己录入的案件
+        // 排除开发商角色
+        if (userRole === '管理员') {
+            // 管理员查看所有案件，但只统计收件人和国资企业专窗角色
+            receiverQuery = 'SELECT u.real_name as receiver, COUNT(*) as total_count, COUNT(*) as completed_count, 0 as pending_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as general_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as developer_transfer_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as transfer_developer_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as state_owned_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as multi_transfer_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as complex_count FROM cases c JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id) WHERE u.role IN (?, ?) GROUP BY u.real_name ORDER BY total_count DESC';
+            receiverParams = ['一般件', '开发商转移', '%转移%', '%国资%', '%分割%', '其他', '收件人', '国资企业专窗'];
+        } else {
+            // 非管理员只查看自己相关的案件，且只统计收件人和国资企业专窗角色
+            receiverQuery = 'SELECT u.real_name as receiver, COUNT(*) as total_count, COUNT(*) as completed_count, 0 as pending_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as general_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as developer_transfer_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as transfer_developer_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as state_owned_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as multi_transfer_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as complex_count FROM cases c JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id) WHERE (c.user_id = ? OR c.receiver_id = ?) AND u.role IN (?, ?) GROUP BY u.real_name ORDER BY total_count DESC';
+            receiverParams = ['一般件', '开发商转移', '%转移%', '%国资%', '%分割%', '其他', userId, userId, '收件人', '国资企业专窗'];
+        }
         const [receiverStatsResult] = await db.execute(receiverQuery, receiverParams);
         receiverStats = receiverStatsResult;
         
@@ -406,8 +414,10 @@ export const getStatisticsHandler = async (req, res) => {
         // 从数据库查询真实的收件人排行数据 - 简化查询，避免参数问题
         let adminRankingQuery, adminRankingParams;
         // 所有角色都能看到完整的收件人排行，包括所有收件人和国资企业专窗
-        adminRankingQuery = 'SELECT u.real_name as receiver, COUNT(*) as total_count, COUNT(*) as completed_count, 0 as pending_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as general_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as transfer_developer_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as state_owned_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as multi_transfer_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as complex_count FROM cases c JOIN users u ON c.receiver_id = u.id GROUP BY u.real_name ORDER BY total_count DESC';
-        adminRankingParams = ['一般件', '%转移%', '%国资%', '%分割%', '其他'];
+        // 修改查询，确保既包含被分配的案件，也包含自己录入的案件
+        // 只统计收件人和国资企业专窗角色，排除开发商角色
+        adminRankingQuery = 'SELECT u.real_name as receiver, COUNT(*) as total_count, COUNT(*) as completed_count, 0 as pending_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as general_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as transfer_developer_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as state_owned_count, SUM(CASE WHEN case_type LIKE ? THEN 1 ELSE 0 END) as multi_transfer_count, SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as complex_count FROM cases c JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id) WHERE u.role IN (?, ?) GROUP BY u.real_name ORDER BY total_count DESC';
+        adminRankingParams = ['一般件', '%转移%', '%国资%', '%分割%', '其他', '收件人', '国资企业专窗'];
         const [adminRankingResult] = await db.execute(adminRankingQuery, adminRankingParams);
         
         // 手动计算百分比，避免复杂的SQL查询
@@ -434,10 +444,12 @@ export const getStatisticsHandler = async (req, res) => {
         
         // 从数据库查询真实的开发商统计数据 - 简化查询，避免参数问题
         let developerQuery, developerParams;
-        if (userRole === '管理员') {
+        // 管理员、收件人和国资企业专窗角色可以查看所有开发商的统计数据
+        if (userRole === '管理员' || userRole === '收件人' || userRole === '国资企业专窗') {
             developerQuery = 'SELECT developer, COUNT(*) as total_count, SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed_count, SUM(CASE WHEN status != ? THEN 1 ELSE 0 END) as pending_count FROM cases WHERE developer IS NOT NULL AND developer != ? GROUP BY developer ORDER BY total_count DESC';
             developerParams = ['已完成', '已完成', ''];
         } else {
+            // 其他角色只能查看自己相关的开发商统计数据
             developerQuery = 'SELECT developer, COUNT(*) as total_count, SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as completed_count, SUM(CASE WHEN status != ? THEN 1 ELSE 0 END) as pending_count FROM cases WHERE developer IS NOT NULL AND developer != ? AND (user_id = ? OR receiver_id = ?) GROUP BY developer ORDER BY total_count DESC';
             developerParams = ['已完成', '已完成', '', userId, userId];
         }

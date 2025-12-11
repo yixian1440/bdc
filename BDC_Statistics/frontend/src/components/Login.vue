@@ -16,6 +16,8 @@
             placeholder="用户名"
             prefix-icon="User"
             size="large"
+            @keyup.enter="passwordInput.focus()"
+            ref="usernameInput"
           />
         </el-form-item>
 
@@ -27,6 +29,8 @@
             prefix-icon="Lock"
             size="large"
             show-password
+            @keyup.enter="handleLogin"
+            ref="passwordInput"
           />
         </el-form-item>
 
@@ -57,6 +61,8 @@ const router = useRouter()
 const store = useStore()
 const loading = ref(false)
 const loginFormRef = ref()
+const usernameInput = ref()
+const passwordInput = ref()
 
 const loginForm = reactive({
   username: '',

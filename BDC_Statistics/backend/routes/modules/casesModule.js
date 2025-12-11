@@ -2,6 +2,7 @@
  * 案件管理模块 - 包含案件的基本CRUD操作
  */
 import { getNextCaseReceiver, handleDeveloperTransferAllocation } from './allocationModule.js';
+import NotificationService from '../../services/notificationService.js';
 
 /**
  * 获取用户案件列表 - 支持查看分配给自己的案件
@@ -147,6 +148,30 @@ export async function createCase(db, caseData) {
         if (caseDate === undefined || caseDate === null || caseDate === '') {
             caseDate = new Date().toISOString().slice(0, 10); // 使用当前日期作为默认值，格式：YYYY-MM-DD
             console.warn(`[${operationId}] 案件日期为空，使用当前日期作为默认值: ${caseDate}`);
+        } else {
+            // 处理前端发送的Date对象，确保日期格式正确，不受时区影响
+            if (typeof caseDate === 'string') {
+                // 如果是字符串，尝试解析为Date对象，然后转换为YYYY-MM-DD格式
+                try {
+                    const dateObj = new Date(caseDate);
+                    if (!isNaN(dateObj.getTime())) {
+                        // 使用Date.UTC()确保时区一致，避免日期减少一天
+                        const utcDate = new Date(Date.UTC(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()));
+                        caseDate = utcDate.toISOString().slice(0, 10);
+                        console.log(`[${operationId}] 日期字符串处理后: ${caseDate}`);
+                    }
+                } catch (error) {
+                    console.error(`[${operationId}] 日期字符串解析失败:`, error);
+                    // 如果解析失败，使用当前日期作为默认值
+                    caseDate = new Date().toISOString().slice(0, 10);
+                    console.warn(`[${operationId}] 日期解析失败，使用当前日期作为默认值: ${caseDate}`);
+                }
+            } else if (caseDate instanceof Date) {
+                // 如果是Date对象，转换为YYYY-MM-DD格式，使用UTC时间避免时区问题
+                const utcDate = new Date(Date.UTC(caseDate.getFullYear(), caseDate.getMonth(), caseDate.getDate()));
+                caseDate = utcDate.toISOString().slice(0, 10);
+                console.log(`[${operationId}] Date对象处理后: ${caseDate}`);
+            }
         }
         
         // 兼容前端发送的caseNumber（驼峰命名）和case_number（下划线命名）
@@ -349,6 +374,54 @@ export async function createCase(db, caseData) {
             status: '已完成',
             completed_at: new Date()
         };
+        
+        // 发送案件分配通知
+        if (finalIsAllocated && finalReceiverId !== safeUserId) {
+            try {
+                // 根据创建人角色和案件类型选择合适的通知方法
+                if (creatorRole === '开发商') {
+                    // 开发商角色创建的案件，获取申请人信息
+                    await NotificationService.sendDeveloperAllocationNotification(
+                        finalReceiverId,
+                        safeCaseType,
+                        safeApplicant
+                    );
+                    console.log(`[${operationId}] 已发送开发商案件分配通知给收件人ID: ${finalReceiverId}`);
+                } else {
+                    // 收件人之间的案件分配，获取案件类型
+                    await NotificationService.sendReceiverAllocationNotification(
+                        finalReceiverId,
+                        safeCaseType
+                    );
+                    console.log(`[${operationId}] 已发送收件人之间案件分配通知给收件人ID: ${finalReceiverId}`);
+                }
+            } catch (notificationError) {
+                console.error(`[${operationId}] 发送案件分配通知失败:`, notificationError);
+                // 通知发送失败不影响案件创建流程，继续执行
+            }
+        }
+        
+        // 发送轮到下一个收件人收件的通知
+        // 只有收件人之间创建的案件才需要提醒下一个收件人，开发商转移的案件不需要
+        if (creatorRole !== '开发商') {
+            try {
+                // 获取下一个收件人信息
+                const nextReceiver = await getNextCaseReceiver(db, finalReceiverId, safeCaseType);
+                if (nextReceiver && nextReceiver.id !== finalReceiverId) {
+                    // 发送轮到收件通知
+                    await NotificationService.sendNextReceiverNotification(
+                        nextReceiver.id,
+                        finalReceiver, // 当前收件人姓名
+                        safeCaseType,
+                        safeApplicant
+                    );
+                    console.log(`[${operationId}] 已发送轮到收件通知给收件人ID: ${nextReceiver.id}`);
+                }
+            } catch (nextReceiverError) {
+                console.error(`[${operationId}] 发送轮到收件通知失败:`, nextReceiverError);
+                // 通知发送失败不影响案件创建流程，继续执行
+            }
+        }
         
         const endTime = Date.now();
         console.log(`[${operationId}] 案件创建成功，耗时: ${endTime - startTime}ms`);

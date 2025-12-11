@@ -25,6 +25,63 @@ class NotificationService {
     }
     
     /**
+     * 发送收件人之间的案件分配通知
+     * @param {number} userId - 接收用户ID
+     * @param {string} caseType - 案件类型
+     * @returns {Promise<Object>} 创建的消息对象
+     */
+    static async sendReceiverAllocationNotification(userId, caseType) {
+        try {
+            const title = '您有一个新的案件待处理';
+            const content = `您有一个新的${caseType}待处理`;
+            
+            return await this.createNotification(userId, title, content, '新任务通知');
+        } catch (error) {
+            console.error('发送收件人之间案件分配通知失败:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * 发送开发商案件分配通知
+     * @param {number} userId - 接收用户ID
+     * @param {string} caseType - 案件类型
+     * @param {string} applicant - 申请人
+     * @returns {Promise<Object>} 创建的消息对象
+     */
+    static async sendDeveloperAllocationNotification(userId, caseType, applicant) {
+        try {
+            const title = '您有一个新的开发商案件待处理';
+            const content = `您有一个新的${caseType}待处理，申请人：${applicant}`;
+            
+            return await this.createNotification(userId, title, content, '新任务通知');
+        } catch (error) {
+            console.error('发送开发商案件分配通知失败:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * 发送轮到收件通知
+     * @param {number} userId - 接收用户ID
+     * @param {string} currentReceiverName - 当前收件人姓名
+     * @param {string} caseType - 案件类型
+     * @param {string} applicant - 申请人
+     * @returns {Promise<Object>} 创建的消息对象
+     */
+    static async sendNextReceiverNotification(userId, currentReceiverName, caseType, applicant) {
+        try {
+            const title = '接下来轮到您收件了';
+            const content = `${currentReceiverName}已经收了一个${caseType}，申请人${applicant}，接下来该由您收件了`;
+            
+            return await this.createNotification(userId, title, content, '新任务通知');
+        } catch (error) {
+            console.error('发送轮到收件通知失败:', error);
+            throw error;
+        }
+    }
+    
+    /**
      * 发送提交确认通知
      * @param {number} userId - 接收用户ID
      * @param {string} caseType - 案件类型
@@ -183,15 +240,11 @@ class NotificationService {
             let countQuery = 'SELECT COUNT(*) as total FROM messages WHERE user_id = ?';
             let countParams = [userId];
             
-            // 如果是收件人角色，只返回同角色和开发商转移件的消息
+            // 如果是收件人角色，返回所有消息类型
+            // 移除了收件人角色的消息类型限制，允许收件人查看所有类型的消息
             if (userRole === '收件人') {
-                // 收件人只能看到轮询提醒和与开发商转移相关的消息
-                // 这里我们通过消息类型和内容来过滤
-                query += ' AND (message_type = ? OR content LIKE ?)';
-                params.push('轮询提醒', '%开发商转移%');
-                
-                countQuery += ' AND (message_type = ? OR content LIKE ?)';
-                countParams.push('轮询提醒', '%开发商转移%');
+                // 收件人可以查看所有类型的消息
+                // 包括新任务通知、提交确认通知等
             }
             
             if (messageType) {

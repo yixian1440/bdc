@@ -146,7 +146,7 @@
       </template>
 
       <!-- 收件人统计视图 -->
-      <template v-else-if="userRole === '收件人'">
+      <template v-else-if="userRole === '收件人' || userRole === '国资企业专窗'">
         <!-- 案件类型统计图表 -->
         <el-row :gutter="20" class="charts-section">
           <el-col :span="12">
@@ -182,7 +182,7 @@
 
         <!-- 我的案件类型详细统计 -->
         <el-row :gutter="20" class="tables-section">
-          <el-col :span="24">
+          <el-col :span="12">
             <el-card class="table-card">
               <div slot="header" class="card-header">
                 <span>我的案件类型详细统计</span>
@@ -190,6 +190,20 @@
               <el-table :data="statistics.typeDetailData || []" style="width: 100%">
                 <el-table-column prop="typeName" label="案件类型" width="180"></el-table-column>
                 <el-table-column prop="count" label="数量" width="180"></el-table-column>
+                <el-table-column prop="percentage" label="占比" width="180"></el-table-column>
+              </el-table>
+            </el-card>
+          </el-col>
+          
+          <!-- 开发商详细统计分析 -->
+          <el-col :span="12">
+            <el-card class="table-card">
+              <div slot="header" class="card-header">
+                <span>开发商详细统计分析</span>
+              </div>
+              <el-table :data="statistics.developer_data || []" style="width: 100%">
+                <el-table-column prop="developerName" label="开发商项目" width="200"></el-table-column>
+                <el-table-column prop="count" label="案件数量" width="180"></el-table-column>
                 <el-table-column prop="percentage" label="占比" width="180"></el-table-column>
               </el-table>
             </el-card>
@@ -382,7 +396,7 @@ export default {
     // 角色显示控制
     const canSeeAllData = computed(() => userRole.value === '管理员');
     const canSeeReceiverData = computed(() => ['管理员', '收件人', '国资企业专窗'].includes(userRole.value));
-    const canSeeDeveloperData = computed(() => ['管理员', '开发商'].includes(userRole.value));
+    const canSeeDeveloperData = computed(() => ['管理员', '开发商', '收件人', '国资企业专窗'].includes(userRole.value));
 
     // 监听错误变化
     watch(() => error.value, (newError) => {

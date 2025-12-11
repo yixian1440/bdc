@@ -108,14 +108,14 @@ const apiRouter = express.Router();
 // 应用缓存控制中间件到所有API路由
 apiRouter.use(cacheControlMiddleware);
 
+// 挂载消息路由到API路由组
+apiRouter.use(messageRoutes);
+
 // 挂载各路由模块 - 直接挂载案件路由到API路由，修复路径重复问题
 apiRouter.use(caseRoutes);
 
 // 新增：添加一个路由，将/api/cases/*请求代理到现有案件路由上，兼容前端请求
 apiRouter.use('/cases', caseRoutes);
-
-// 挂载消息路由到API路由组
-apiRouter.use(messageRoutes);
 
 // 应用API路由组
 app.use('/api', apiRouter);
