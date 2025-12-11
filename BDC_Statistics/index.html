@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>不动产登记收件明细统计系统</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>不动产登记收件明细统计系统</h1>
+            <p>统计人员：顾永彪、杨苗苗、童昭仪、杨海艺</p>
+        </header>
+
+        <!-- 收件登记区域 -->
+        <section class="registration-section">
+            <h2>收件登记</h2>
+            <div class="form-group">
+                <label for="receiver">收件人：</label>
+                <select id="receiver">
+                    <option value="顾永彪">顾永彪</option>
+                    <option value="杨苗苗">杨苗苗</option>
+                    <option value="童昭仪">童昭仪</option>
+                    <option value="杨海艺">杨海艺</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="caseType">收件类型：</label>
+                <select id="caseType">
+                    <option value="一般件">一般件</option>
+                    <option value="开发商">开发商</option>
+                    <option value="国资">国资</option>
+                    <option value="多人分割转让">多人分割转让</option>
+                    <option value="其他复杂件">其他复杂件</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="caseDate">收件日期：</label>
+                <input type="date" id="caseDate">
+            </div>
+            <div class="form-group">
+                <label for="caseDescription">案件描述：</label>
+                <input type="text" id="caseDescription" placeholder="简要描述案件内容">
+            </div>
+            <button id="addCaseBtn" class="btn-primary">添加收件</button>
+        </section>
+
+        <!-- 统计展示区域 -->
+        <section class="statistics-section">
+            <h2>统计信息</h2>
+            
+            <!-- 时间筛选 -->
+            <div class="filter-group">
+                <label>统计周期：</label>
+                <select id="timeFilter">
+                    <option value="month">本月</option>
+                    <option value="year">本年</option>
+                    <option value="all">全部</option>
+                </select>
+                <select id="monthFilter" style="display: none;">
+                    <!-- 月份选项将通过JS动态生成 -->
+                </select>
+                <select id="yearFilter">
+                    <!-- 年份选项将通过JS动态生成 -->
+                </select>
+            </div>
+
+            <!-- 人员统计卡片 -->
+            <div class="stats-cards" id="personStats">
+                <!-- 人员统计卡片将通过JS动态生成 -->
+            </div>
+
+            <!-- 类型统计 -->
+            <div class="type-stats">
+                <h3>收件类型统计</h3>
+                <div id="typeStatsChart">
+                    <!-- 类型统计图表将通过JS动态生成 -->
+                </div>
+            </div>
+
+            <!-- 公平分配建议 -->
+            <div class="allocation-suggestion">
+                <h3>下次收件分配建议</h3>
+                <div id="allocationSuggestions">
+                    <!-- 分配建议将通过JS动态生成 -->
+                </div>
+            </div>
+        </section>
+
+        <!-- 数据表格 -->
+        <section class="data-table-section">
+            <h2>收件明细表</h2>
+            <table id="casesTable">
+                <thead>
+                    <tr>
+                        <th>序号</th>
+                        <th>收件人</th>
+                        <th>收件类型</th>
+                        <th>收件日期</th>
+                        <th>案件描述</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="casesTableBody">
+                    <!-- 表格数据将通过JS动态生成 -->
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

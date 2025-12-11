@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>性能监控面板 - BDC统计系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #007aff 0%, #5ac8fa 100%);
+            color: white;
+            padding: 30px 0;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 20px rgba(0, 122, 255, 0.15);
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card h2 {
+            font-size: 1.3rem;
+            color: #007aff;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .card h3 {
+            font-size: 1.1rem;
+            color: #6e6e73;
+            margin-bottom: 12px;
+        }
+        
+        .metric {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #1d1d1f;
+            margin: 10px 0;
+        }
+        
+        .metric.positive {
+            color: #34c759;
+        }
+        
+        .metric.warning {
+            color: #ff9500;
+        }
+        
+        .metric.danger {
+            color: #ff3b30;
+        }
+        
+        .small-metric {
+            display: inline-block;
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-right: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .chart-container {
+            width: 100%;
+            height: 300px;
+            margin-top: 20px;
+        }
+        
+        .slow-queries-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .query-item {
+            background: #f8f8f8;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9rem;
+        }
+        
+        .query-time {
+            font-weight: 600;
+            color: #007aff;
+        }
+        
+        .refresh-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background: #007aff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        button:hover {
+            background: #0051d5;
+        }
+        
+        select {
+            padding: 10px;
+            border: 1px solid #d1d1d6;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+        
+        .last-updated {
+            color: #6e6e73;
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e5e5ea;
+        }
+        
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: border-color 0.3s ease;
+        }
+        
+        .tab.active {
+            border-bottom-color: #007aff;
+            font-weight: 600;
+            color: #007aff;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div style="padding: 0 20px;">
+                <h1>🎯 性能监控面板</h1>
+                <p>BDC统计系统 - 实时API性能监控与分析</p>
+            </div>
+        </header>
+        
+        <div class="refresh-controls">
+            <button id="refresh-btn">🔄 刷新数据</button>
+            <select id="refresh-interval">
+                <option value="5000">5秒</option>
+                <option value="10000">10秒</option>
+                <option value="30000">30秒</option>
+                <option value="60000">1分钟</option>
+            </select>
+            <span id="last-updated" class="last-updated">最后更新: 从未</span>
+        </div>
+        
+        <div class="tabs">
+            <div class="tab active" data-tab="overview">概览</div>
+            <div class="tab" data-tab="api">API性能</div>
+            <div class="tab" data-tab="database">数据库性能</div>
+            <div class="tab" data-tab="cache">缓存统计</div>
+        </div>
+        
+        <!-- 概览面板 -->
+        <div id="overview" class="tab-content active">
+            <div class="dashboard-grid">
+                <div class="card">
+                    <h2>📊 系统状态</h2>
+                    <div id="system-status"></div>
+                </div>
+                
+                <div class="card">
+                    <h2>🚀 平均响应时间</h2>
+                    <div class="metric" id="avg-response-time">--</div>
+                    <div>毫秒</div>
+                </div>
+                
+                <div class="card">
+                    <h2>💾 缓存命中率</h2>
+                    <div class="metric" id="cache-hit-rate">--</div>
+                    <div>%</div>
+                </div>
+                
+                <div class="card">
+                    <h2>⚠️ 慢查询数</h2>
+                    <div class="metric warning" id="slow-queries-count">--</div>
+                    <div>个 (超过500ms)</div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>📈 响应时间趋势</h2>
+                <div class="chart-container">
+                    <canvas id="response-time-chart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- API性能面板 -->
+        <div id="api" class="tab-content">
+            <div class="card">
+                <h2>📋 API端点统计</h2>
+                <div id="api-endpoints"></div>
+            </div>
+            
+            <div class="card">
+                <h2>📈 API响应时间分布</h2>
+                <div class="chart-container">
+                    <canvas id="api-performance-chart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 数据库性能面板 -->
+        <div id="database" class="tab-content">
+            <div class="card">
+                <h2>🔍 最慢查询</h2>
+                <div class="slow-queries-list" id="slow-queries"></div>
+            </div>
+            
+            <div class="card">
+                <h2>📊 数据库操作统计</h2>
+                <div class="chart-container">
+                    <canvas id="db-operations-chart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 缓存统计面板 -->
+        <div id="cache" class="tab-content">
+            <div class="card">
+                <h2>💾 缓存详细统计</h2>
+                <div id="cache-stats"></div>
+            </div>
+            
+            <div class="card">
+                <h2>📊 缓存操作分布</h2>
+                <div class="chart-container">
+                    <canvas id="cache-operations-chart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 图表实例存储
+        let charts = {};
+        let refreshIntervalId = null;
+        let mockData = {
+            systemStatus: {
+                status: 'ok',
+                timestamp: new Date().toISOString(),
+                monitoringEnabled: true
+            },
+            avgResponseTime: 245,
+            cacheHitRate: 82,
+            slowQueriesCount: 3,
+            responseTimes: [
+                { time: '09:00', value: 210 },
+                { time: '09:10', value: 235 },
+                { time: '09:20', value: 220 },
+                { time: '09:30', value: 245 },
+                { time: '09:40', value: 250 },
+                { time: '09:50', value: 230 },
+                { time: '10:00', value: 245 }
+            ],
+            apiEndpoints: [
+                { path: '/api/cases/list', method: 'GET', avgTime: 320, requests: 124 },
+                { path: '/api/users/profile', method: 'GET', avgTime: 150, requests: 89 },
+                { path: '/api/developers', method: 'GET', avgTime: 210, requests: 67 },
+                { path: '/api/cases/statistics', method: 'GET', avgTime: 420, requests: 45 }
+            ],
+            slowQueries: [
+                {
+                    query: 'SELECT * FROM cases WHERE status = ? AND created_at > ?',
+                    executionTime: 850,
+                    table: 'cases',
+                    queryType: 'select'
+                },
+                {
+                    query: 'SELECT * FROM users u JOIN cases c ON u.id = c.receiver_id WHERE u.role = ?',
+                    executionTime: 620,
+                    table: 'users,cases',
+                    queryType: 'select'
+                },
+                {
+                    query: 'SELECT COUNT(*) as total FROM cases',
+                    executionTime: 580,
+                    table: 'cases',
+                    queryType: 'select'
+                }
+            ],
+            cacheStats: {
+                hits: 1245,
+                misses: 275,
+                sets: 1520,
+                deletes: 145,
+                keys: 890
+            }
+        };
+        
+        // 初始化函数
+        function init() {
+            setupTabs();
+            fetchMetrics();
+            setupRefreshInterval();
+        }
+        
+        // 设置标签页
+        function setupTabs() {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    // 移除所有活跃状态
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    
+                    // 添加当前活跃状态
+                    tab.classList.add('active');
+                    const tabId = tab.getAttribute('data-tab');
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+        }
+        
+        // 设置刷新间隔
+        function setupRefreshInterval() {
+            const intervalSelect = document.getElementById('refresh-interval');
+            const refreshBtn = document.getElementById('refresh-btn');
+            
+            function startInterval() {
+                if (refreshIntervalId) {
+                    clearInterval(refreshIntervalId);
+                }
+                
+                const interval = parseInt(intervalSelect.value, 10);
+                refreshIntervalId = setInterval(fetchMetrics, interval);
+            }
+            
+            intervalSelect.addEventListener('change', startInterval);
+            refreshBtn.addEventListener('click', fetchMetrics);
+            
+            startInterval();
+        }
+        
+        // 获取性能指标
+        async function fetchMetrics() {
+            try {
+                // 在实际环境中，这里应该从服务器获取真实数据
+                // const response = await fetch('/metrics');
+                // const data = await response.json();
+                
+                // 使用模拟数据更新UI
+                updateUI(mockData);
+                
+                // 更新最后更新时间
+                const now = new Date();
+                document.getElementById('last-updated').textContent = `最后更新: ${now.toLocaleString()}`;
+                
+            } catch (error) {
+                console.error('获取性能指标失败:', error);
+            }
+        }
+        
+        // 更新UI
+        function updateUI(data) {
+            updateSystemStatus(data.systemStatus);
+            updateOverviewMetrics(data);
+            updateApiEndpoints(data.apiEndpoints);
+            updateSlowQueries(data.slowQueries);
+            updateCacheStats(data.cacheStats);
+            updateCharts(data);
+        }
+        
+        // 更新系统状态
+        function updateSystemStatus(status) {
+            const element = document.getElementById('system-status');
+            element.innerHTML = `
+                <div>状态: <span style="color: ${status.status === 'ok' ? '#34c759' : '#ff3b30'}">${status.status.toUpperCase()}</span></div>
+                <div>时间: ${new Date(status.timestamp).toLocaleString()}</div>
+                <div>监控: ${status.monitoringEnabled ? '✅ 已启用' : '❌ 已禁用'}</div>
+            `;
+        }
+        
+        // 更新概览指标
+        function updateOverviewMetrics(data) {
+            document.getElementById('avg-response-time').textContent = data.avgResponseTime;
+            document.getElementById('cache-hit-rate').textContent = data.cacheHitRate;
+            document.getElementById('slow-queries-count').textContent = data.slowQueriesCount;
+        }
+        
+        // 更新API端点统计
+        function updateApiEndpoints(endpoints) {
+            const element = document.getElementById('api-endpoints');
+            element.innerHTML = endpoints.map(ep => `
+                <div class="query-item">
+                    <div><strong>${ep.method} ${ep.path}</strong></div>
+                    <div>平均响应: <span class="query-time">${ep.avgTime}ms</span> | 请求数: ${ep.requests}</div>
+                </div>
+            `).join('');
+        }
+        
+        // 更新慢查询列表
+        function updateSlowQueries(queries) {
+            const element = document.getElementById('slow-queries');
+            element.innerHTML = queries.map(q => `
+                <div class="query-item">
+                    <div>执行时间: <span class="query-time">${q.executionTime}ms</span> | ${q.queryType} | ${q.table}</div>
+                    <div style="margin-top: 5px; color: #666;">${q.query}</div>
+                </div>
+            `).join('');
+        }
+        
+        // 更新缓存统计
+        function updateCacheStats(stats) {
+            const element = document.getElementById('cache-stats');
+            element.innerHTML = `
+                <div class="small-metric">命中: ${stats.hits}</div>
+                <div class="small-metric">未命中: ${stats.misses}</div>
+                <div class="small-metric">设置: ${stats.sets}</div>
+                <div class="small-metric">删除: ${stats.deletes}</div>
+                <div class="small-metric">键数量: ${stats.keys}</div>
+                <div class="small-metric">内存使用: ~${Math.round(stats.keys * 0.1)}MB</div>
+            `;
+        }
+        
+        // 更新图表
+        function updateCharts(data) {
+            // 响应时间趋势图
+            updateResponseTimeChart(data.responseTimes);
+            
+            // API性能图
+            updateApiPerformanceChart(data.apiEndpoints);
+            
+            // 数据库操作图
+            updateDbOperationsChart();
+            
+            // 缓存操作图
+            updateCacheOperationsChart(data.cacheStats);
+        }
+        
+        // 更新响应时间趋势图
+        function updateResponseTimeChart(data) {
+            const ctx = document.getElementById('response-time-chart').getContext('2d');
+            const labels = data.map(d => d.time);
+            const values = data.map(d => d.value);
+            
+            if (charts.responseTime) {
+                charts.responseTime.destroy();
+            }
+            
+            charts.responseTime = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '响应时间 (ms)',
+                        data: values,
+                        borderColor: '#007aff',
+                        backgroundColor: 'rgba(0, 122, 255, 0.1)',
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 更新API性能图
+        function updateApiPerformanceChart(endpoints) {
+            const ctx = document.getElementById('api-performance-chart').getContext('2d');
+            const labels = endpoints.map(e => `${e.method} ${e.path}`);
+            const values = endpoints.map(e => e.avgTime);
+            
+            if (charts.apiPerformance) {
+                charts.apiPerformance.destroy();
+            }
+            
+            charts.apiPerformance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '平均响应时间 (ms)',
+                        data: values,
+                        backgroundColor: values.map(v => v > 300 ? '#ff3b30' : v > 200 ? '#ff9500' : '#34c759')
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 更新数据库操作图
+        function updateDbOperationsChart() {
+            const ctx = document.getElementById('db-operations-chart').getContext('2d');
+            
+            if (charts.dbOperations) {
+                charts.dbOperations.destroy();
+            }
+            
+            charts.dbOperations = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+                    datasets: [{
+                        data: [75, 15, 8, 2],
+                        backgroundColor: ['#007aff', '#34c759', '#ff9500', '#ff3b30']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        
+        // 更新缓存操作图
+        function updateCacheOperationsChart(stats) {
+            const ctx = document.getElementById('cache-operations-chart').getContext('2d');
+            
+            if (charts.cacheOperations) {
+                charts.cacheOperations.destroy();
+            }
+            
+            charts.cacheOperations = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['命中', '未命中'],
+                    datasets: [{
+                        data: [stats.hits, stats.misses],
+                        backgroundColor: ['#34c759', '#ff9500']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+        
+        // 页面加载时初始化
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

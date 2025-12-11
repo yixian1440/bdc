@@ -1,0 +1,27 @@
+{
+  "name": "bdc-statistics-backend",
+  "version": "1.0.0",
+  "description": "不动产登记收件统计系统后端API",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon --no-deprecation server.js",
+    "start": "node --no-deprecation server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^4.18.2",
+    "express-prom-bundle": "^8.0.0",
+    "express-rate-limit": "^6.8.1",
+    "helmet": "^7.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.6.0",
+    "node-cache": "^5.1.2",
+    "prom-client": "^15.1.3",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
+  }
+}

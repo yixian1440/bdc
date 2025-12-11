@@ -1,0 +1,1573 @@
+import express from 'express';
+import db from '../config/database.js';
+import jwt from 'jsonwebtoken';
+import { paginatedQuery, parallelQueries } from '../utils/asyncUtils.js';
+
+const router = express.Router();
+const JWT_SECRET = process.env.JWT_SECRET || 'bdc_statistics_secret_key';
+
+// 认证中间件
+const authenticateToken = (req, res, next) => {
+    const token = req.headers.authorization?.split(' ')[1];
+    
+    if (!token) {
+        return res.status(401).json({ error: '需要认证' });
+    }
+
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (error) {
+        return res.status(403).json({ error: '无效的认证令牌' });
+    }
+};
+
+// 验证是否为管理员的中间件
+const verifyAdmin = (req, res, next) => {
+    if (!req.user) {
+        return res.status(401).json({ error: '用户信息未认证' });
+    }
+    if (req.user.role !== '管理员') {
+        return res.status(403).json({ error: '只有管理员可以访问此功能' });
+    }
+    next();
+};
+
+// 获取当前用户的收件记录
+router.get('/my-cases', authenticateToken, async (req, res) => {
+    try {
+        const { page = 1, limit = 10, startDate, endDate, caseType, sortBy, sortOrder } = req.query;
+        
+        // 构建过滤条件 - 使用表别名c
+        const filters = { 'c.user_id': req.user.id };
+        
+        // 单独处理日期范围过滤
+        let dateWhereClause = '';
+        let dateParams = [];
+        if (startDate && endDate) {
+            dateWhereClause = ' AND c.case_date BETWEEN ? AND ?';
+            dateParams = [startDate, endDate];
+        }
+        
+        // 添加caseType过滤条件
+        if (caseType) {
+            filters['c.case_type'] = caseType;
+        }
+        
+        // 设置排序字段和方向
+        let sortField = 'c.case_date';
+        let sortDirection = 'DESC';
+        
+        if (sortBy) {
+            // 确保排序字段安全
+            const safeFields = ['case_date', 'case_number', 'case_type'];
+            if (safeFields.includes(sortBy)) {
+                sortField = `c.${sortBy}`;
+            }
+        }
+        
+        if (sortOrder) {
+            // 确保排序方向安全
+            const safeDirections = ['asc', 'desc'];
+            if (safeDirections.includes(sortOrder.toLowerCase())) {
+                sortDirection = sortOrder.toUpperCase();
+            }
+        }
+        
+        // 手动构建完整的WHERE子句
+        const filterKeys = Object.keys(filters);
+        let whereClause = '';
+        const params = [];
+        
+        if (filterKeys.length > 0) {
+            whereClause = 'WHERE ' + filterKeys.map(key => {
+                params.push(filters[key]);
+                return `${key} = ?`;
+            }).join(' AND ');
+        }
+        
+        // 添加日期范围条件
+        whereClause += dateWhereClause;
+        params.push(...dateParams);
+        
+        // 构建完整的SQL查询
+        const safePage = Math.max(1, parseInt(page, 10) || 1);
+        const safePageSize = Math.max(1, Math.min(100, parseInt(limit, 10) || 10));
+        const offset = (safePage - 1) * safePageSize;
+        
+        const selectSql = `
+            SELECT c.*, u.real_name 
+            FROM cases AS c 
+            JOIN users AS u ON c.user_id = u.id 
+            ${whereClause} 
+            ORDER BY ${sortField} ${sortDirection} 
+            LIMIT ? OFFSET ?
+        `;
+        
+        const countSql = `
+            SELECT COUNT(*) as total 
+            FROM cases AS c 
+            JOIN users AS u ON c.user_id = u.id 
+            ${whereClause}
+        `;
+        
+        const selectParams = [...params, safePageSize, offset];
+        const countParams = [...params];
+        
+        // 并行执行查询
+        const [results, countResults] = await Promise.all([
+            db.execute(selectSql, selectParams),
+            db.execute(countSql, countParams)
+        ]);
+        
+        const data = results[0];
+        const totalCount = countResults[0][0].total || 0;
+        
+        const result = {
+            data,
+            pagination: {
+                total: totalCount,
+                page: safePage,
+                pageSize: safePageSize
+            }
+        };
+        
+        const cases = result.data;
+        const total = result.pagination.total;
+
+        res.json({
+            cases,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
+        });
+    } catch (error) {
+        console.error('获取收件记录错误:', error);
+        res.status(500).json({ error: '服务器内部错误' });
+    }
+});
+
+// 添加收件记录（支持自动分配）
+router.post('/cases', authenticateToken, async (req, res) => {
+    try {
+        // 添加详细日志
+        console.log('添加收件记录请求:', req.body);
+        
+        // 从请求体中提取字段
+        let {
+            case_number,
+            client_name,
+            estimated_subdivision = 0,
+            case_type,
+            case_date,
+            case_description,
+            estimated_duration,
+            property_address,
+            contact_info,
+            case_content
+        } = req.body;
+        
+        // 清理参数，将undefined转换为null
+        const sanitize = (value) => value === undefined ? null : value;
+        case_number = sanitize(case_number);
+        client_name = sanitize(client_name);
+        estimated_subdivision = sanitize(estimated_subdivision) || 0;
+        case_type = sanitize(case_type);
+        case_date = sanitize(case_date);
+        case_description = sanitize(case_description);
+        estimated_duration = sanitize(estimated_duration);
+        property_address = sanitize(property_address);
+        contact_info = sanitize(contact_info);
+        case_content = sanitize(case_content);
+
+        if (!case_number || !case_type || !case_date) {
+            console.log('缺少必填字段:', { case_number, case_type, case_date });
+            return res.status(400).json({ error: '必填字段不能为空' });
+        }
+
+        // 检查案件编号是否已存在
+        const [existingCase] = await db.execute('SELECT id FROM cases WHERE case_number = ?', [case_number]);
+        if (existingCase.length > 0) {
+            console.log('案件编号已存在:', case_number);
+            return res.status(400).json({ error: '案件编号已存在' });
+        }
+
+        // 不再使用优先级和复杂度，统一使用案件类型权重
+        const allocationResult = await calculateAllocationSuggestion(
+            case_type, 1, 1, estimated_duration
+        );
+
+        // 确定收件人 - 对于特定类型的案件，使用自动分配算法
+        let receiver;
+        let receiverUserId = req.user.id; // 默认使用当前用户ID
+        
+        // 需要自动分配的案件类型：开发商转移登记、国资、企业
+        const needAutoAssign = ['开发商转移登记', '国资', '企业'].includes(case_type);
+        
+        if (needAutoAssign) {
+            try {
+                console.log(`开始自动分配收件人，案件类型: ${case_type}...`);
+                // 使用getNextCaseReceiver获取推荐的收件人
+                const receiverResult = await getNextCaseReceiver(req.user.id, case_type, null, null);
+                
+                console.log('推荐收件人结果:', JSON.stringify(receiverResult, null, 2));
+                
+                // 检查返回结果格式
+                if (receiverResult.receiver) {
+                    receiver = receiverResult.receiver;
+                    console.log('找到收件人:', receiver);
+                    // 获取该收件人的用户ID
+                    const [receiverUser] = await db.execute('SELECT id FROM users WHERE username = ?', [receiver]);
+                    if (receiverUser.length > 0) {
+                        receiverUserId = receiverUser[0].id;
+                        console.log('收件人ID:', receiverUserId);
+                    } else {
+                        console.log('未找到收件人用户信息:', receiver);
+                    }
+                } else if (receiverResult.length > 0 && receiverResult[0].receiver) {
+                    // 处理数组格式的返回结果
+                    receiver = receiverResult[0].receiver;
+                    console.log('从数组结果找到收件人:', receiver);
+                    const [receiverUser] = await db.execute('SELECT id FROM users WHERE username = ?', [receiver]);
+                    if (receiverUser.length > 0) {
+                        receiverUserId = receiverUser[0].id;
+                        console.log('收件人ID:', receiverUserId);
+                    } else {
+                        console.log('未找到收件人用户信息:', receiver);
+                    }
+                } else if (receiverResult.data && receiverResult.data.recommendations && receiverResult.data.recommendations.length > 0) {
+                    // 处理可能的不同返回格式
+                    receiver = receiverResult.data.recommendations[0].receiver;
+                    console.log('从data.recommendations找到收件人:', receiver);
+                    const [receiverUser] = await db.execute('SELECT id FROM users WHERE username = ?', [receiver]);
+                    if (receiverUser.length > 0) {
+                        receiverUserId = receiverUser[0].id;
+                        console.log('收件人ID:', receiverUserId);
+                    } else {
+                        console.log('未找到收件人用户信息:', receiver);
+                    }
+                } else {
+                    console.log('未找到推荐收件人，使用默认值');
+                }
+            } catch (error) {
+                console.error('自动分配收件人失败:', error);
+                console.error('错误堆栈:', error.stack);
+                // 出错时继续使用默认值
+            }
+        } else {
+            console.log('非开发商转移件类型案件，不进行自动分配');
+        }
+        
+        // 如果自动分配失败或者非开发商类型，使用当前登录用户
+        if (!receiver) {
+            const [currentUser] = await db.execute('SELECT username FROM users WHERE id = ?', [req.user.id]);
+            if (currentUser.length > 0) {
+                receiver = currentUser[0].username;
+                console.log('使用当前用户作为收件人:', receiver);
+            } else {
+                console.log('无法获取当前用户信息');
+                return res.status(500).json({ error: '无法获取用户信息' });
+            }
+        }
+
+        console.log('准备插入案件记录:', { case_number, receiverUserId, weight: allocationResult.weight });
+        
+        // 使用最基本的字段结构
+          const [result] = await db.execute(
+              `INSERT INTO cases (
+                  user_id, case_number, case_type, case_date, receiver
+              ) VALUES (?, ?, ?, ?, ?)`,
+              [
+                  req.user.id, case_number, case_type, case_date, receiver
+              ]
+          );
+
+        console.log('案件插入成功，ID:', result.insertId);
+        
+        // 更新收件人的当前工作量
+        try {
+            await db.execute(
+                'UPDATE users SET current_workload = current_workload + 1 WHERE id = ?',
+                [receiverUserId]
+            );
+            console.log('更新用户工作量成功:', { userId: receiverUserId });
+        } catch (updateError) {
+            console.error('更新用户工作量失败:', updateError);
+            // 即使更新工作量失败，也不影响案件创建
+        }
+
+        res.status(201).json({
+            message: '收件记录添加成功',
+            caseId: result.insertId,
+            allocation_suggestion: allocationResult.suggestion
+        });
+    } catch (error) {
+        console.error('添加收件记录错误:', error);
+        console.error('错误堆栈:', error.stack);
+        res.status(500).json({ error: '服务器内部错误', details: error.message });
+    }
+});
+
+// 加权分配建议算法（基于平均分配原则）
+async function calculateAllocationSuggestion(caseType, priority, complexity, estimatedDuration) {
+    let baseWeight = 1.0;
+    
+    // 根据新需求：一般件和非一般件分别按照平均分配原则
+    if (caseType === '一般件') {
+        baseWeight = 1.0; // 一般件权重固定为1.0
+    } else {
+        baseWeight = 1.0; // 非一般件权重也固定为1.0
+    }
+    
+    // 生成分配建议
+    let suggestion = '';
+    if (baseWeight >= 2.5) {
+        suggestion = '建议分配给资深专家处理';
+    } else if (baseWeight >= 1.8) {
+        suggestion = '建议分配给经验丰富人员';
+    } else if (baseWeight >= 1.3) {
+        suggestion = '建议分配给普通人员';
+    } else {
+        suggestion = '建议分配给新手或辅助人员';
+    }
+    
+    // 生成基于平均分配原则的建议文本
+    if (caseType === '一般件') {
+        suggestion = '一般件，按照平均分配原则，建议分配给近期处理一般件数量较少的收件人';
+    } else {
+        suggestion = `${caseType}，按照平均分配原则，建议分配给近期处理复杂件数量较少的收件人`;
+    }
+    
+    return {
+        weight: parseFloat(baseWeight.toFixed(2)),
+        suggestion: suggestion
+    };
+}
+
+// 获取统计数据和分配建议（增强版：支持时间筛选和收件人排行）
+// 支持前端使用'/cases/statistics'路径
+router.get('/cases/statistics', authenticateToken, async (req, res) => {
+    // 直接调用下面的统计数据处理逻辑
+    return getStatisticsHandler(req, res);
+});
+
+// 保留原有的'/statistics'路径支持向后兼容
+router.get('/statistics', authenticateToken, async (req, res) => {
+    return getStatisticsHandler(req, res);
+});
+
+// 将统计数据处理逻辑抽离为独立函数
+async function getStatisticsHandler(req, res) {
+    try {
+        const userId = req.user.id;
+        const { timeFilter = 'month', year, month, startDate, endDate } = req.query;
+        const userRole = req.user.role;
+        
+        console.log('统计分析请求:', { userId, userRole, timeFilter, year, month, startDate, endDate });
+
+        // 构建时间筛选条件
+        let timeCondition = '';
+        let timeParams = [];
+
+        // 优先使用startDate和endDate参数（如果提供）
+        if (startDate && endDate) {
+            console.log('使用自定义日期范围:', { startDate, endDate });
+            timeCondition = 'AND case_date >= ? AND case_date <= ?';
+            timeParams = [startDate, endDate];
+        } else if (timeFilter === 'week') {
+            timeCondition = 'AND case_date >= DATE_SUB(NOW(), INTERVAL 7 DAY)';
+        } else if (timeFilter === 'month') {
+            timeCondition = 'AND case_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)';
+        } else if (timeFilter === 'year') {
+            if (year) {
+                timeCondition = 'AND YEAR(case_date) = ?';
+                timeParams = [parseInt(year)];
+            } else {
+                timeCondition = 'AND YEAR(case_date) = YEAR(NOW())';
+            }
+        } else if (timeFilter === 'custom' && year && month) {
+            timeCondition = 'AND YEAR(case_date) = ? AND MONTH(case_date) = ?';
+            timeParams = [parseInt(year), parseInt(month)];
+        }
+        
+        // 获取用户基本信息
+        let userInfo = [];
+        try {
+            [userInfo] = await db.execute('SELECT real_name, expertise_level, current_workload, max_workload FROM users WHERE id = ?', [userId]);
+        } catch (userError) {
+            console.error('获取用户信息错误:', userError);
+            userInfo = [{ real_name: '未知用户', expertise_level: '未知', current_workload: 0, max_workload: 0 }];
+        }
+        
+        // 初始化所有统计数据为默认值，确保即使查询失败也能返回有效结构
+        let typeStats = [];
+        let workloadTrend = [];
+        let users = [];
+        let receiverStats = [];
+        let allocationAnalysis = [];
+        let weightedSuggestions = { recommendations: [], workloadAnalysis: '暂无数据' };
+        let roleStatistics = [];
+        let developerStatistics = [];
+        
+        // 尝试获取基础数据
+        try {
+            console.log('开始获取基础统计数据...');
+            
+            // 为了避免并行查询可能导致的问题，我们改为顺序执行查询，但优化每个查询的性能
+            
+            // 1. 获取案件类型统计
+            try {
+                console.log('获取案件类型统计...');
+                // 修复WHERE条件构建，避免语法错误
+                let whereClause = '';
+                let typeQueryParams = [];
+                
+                if (userRole === '管理员') {
+                    whereClause = timeCondition ? `WHERE ${timeCondition.substring(4)}` : ''; // 移除AND前缀
+                    typeQueryParams = [...timeParams];
+                } else {
+                    whereClause = timeCondition ? `WHERE user_id = ? ${timeCondition}` : 'WHERE user_id = ?';
+                    typeQueryParams = [userId, ...timeParams];
+                }
+                
+                const typeQuery = `
+                    SELECT case_type, COUNT(*) as count 
+                    FROM cases 
+                    ${whereClause}
+                    GROUP BY case_type 
+                    ORDER BY count DESC
+                `;
+                
+                const [typeResults] = await db.execute(typeQuery, typeQueryParams);
+                typeStats = typeResults;
+                console.log('案件类型统计完成:', typeStats.length, '条记录');
+            } catch (error) {
+                console.error('获取案件类型统计错误:', error);
+                typeStats = [];
+            }
+            
+            // 2. 获取所有用户信息
+            try {
+                console.log('获取用户信息...');
+                const [usersResults] = await db.execute('SELECT real_name, role FROM users');
+                users = usersResults;
+                console.log('用户信息获取完成:', users.length, '个用户');
+            } catch (error) {
+                console.error('获取用户信息错误:', error);
+                users = [];
+            }
+            
+            // 3. 获取分配建议分析
+            try {
+                console.log('获取分配建议分析...');
+                let allocationAnalysisQuery = '';
+                let allocationQueryParams = [];
+                
+                if (userRole === '管理员') {
+                    // 管理员可以查看所有用户的分配建议
+                    const whereClause = timeCondition ? `WHERE ${timeCondition.substring(4)}` : '';
+                    allocationAnalysisQuery = `
+                        SELECT 
+                            allocation_suggestion,
+                            COUNT(*) as count,
+                            AVG(assigned_weight) as avg_weight
+                        FROM cases 
+                        ${whereClause}
+                        GROUP BY allocation_suggestion
+                        ORDER BY count DESC
+                    `;
+                    allocationQueryParams = [...timeParams];
+                } else {
+                    // 普通用户只能查看自己的
+                    allocationAnalysisQuery = `
+                        SELECT 
+                            allocation_suggestion,
+                            COUNT(*) as count,
+                            AVG(assigned_weight) as avg_weight
+                        FROM cases 
+                        WHERE user_id = ? ${timeCondition}
+                        GROUP BY allocation_suggestion
+                        ORDER BY count DESC
+                    `;
+                    allocationQueryParams = [userId, ...timeParams];
+                }
+                
+                const [allocationResults] = await db.execute(allocationAnalysisQuery, allocationQueryParams);
+                allocationAnalysis = allocationResults;
+                console.log('分配建议分析完成:', allocationAnalysis.length, '条记录');
+            } catch (error) {
+                console.error('获取分配建议分析错误:', error);
+                allocationAnalysis = [];
+            }
+            
+            // 4. 获取收件人排行统计
+            try {
+                console.log('获取收件人排行统计...');
+                // 修复WHERE条件构建，避免语法错误
+                let whereClause = '';
+                let receiverQueryParams = [];
+                
+                if (userRole === '管理员') {
+                    whereClause = timeCondition ? `WHERE ${timeCondition.substring(4)}` : ''; // 移除AND前缀
+                    receiverQueryParams = [...timeParams];
+                } else {
+                    whereClause = timeCondition ? `WHERE user_id = ? ${timeCondition}` : 'WHERE user_id = ?';
+                    receiverQueryParams = [userId, ...timeParams];
+                }
+                
+                const receiverStatsQuery = `
+                    SELECT 
+                        receiver, 
+                        COUNT(*) as total_count,
+                        SUM(CASE WHEN status = '已处理' THEN 1 ELSE 0 END) as completed_count,
+                        SUM(CASE WHEN status = '未处理' THEN 1 ELSE 0 END) as pending_count,
+                        SUM(CASE WHEN case_type = '一般件' THEN 1 ELSE 0 END) as general_count,
+                        SUM(CASE WHEN case_type = '开发商转移登记' THEN 1 ELSE 0 END) as transfer_developer_count,
+                        SUM(CASE WHEN case_type = '国资' THEN 1 ELSE 0 END) as state_owned_count,
+                        SUM(CASE WHEN case_type = '多人分割转让' THEN 1 ELSE 0 END) as multi_transfer_count,
+                        SUM(CASE WHEN case_type = '其他复杂件' THEN 1 ELSE 0 END) as complex_count,
+                        SUM(COALESCE(estimated_duration, 0)) as total_estimated_duration
+                    FROM cases 
+                    ${whereClause}
+                    GROUP BY receiver
+                    ORDER BY total_count DESC
+                `;
+                
+                const [receiverResults] = await db.execute(receiverStatsQuery, receiverQueryParams);
+                receiverStats = receiverResults;
+                console.log('收件人排行统计完成:', receiverStats.length, '条记录');
+            } catch (error) {
+                console.error('获取收件人排行统计错误:', error);
+                receiverStats = [];
+            }
+            
+            // 5. 获取工作量趋势数据
+            try {
+                console.log('获取工作量趋势数据...');
+                let whereClause = '';
+                let trendParams = [];
+                
+                // 修复WHERE条件构建，避免语法错误
+                if (userRole === '管理员') {
+                    whereClause = timeCondition ? `WHERE ${timeCondition.substring(4)}` : ''; // 移除AND前缀
+                    trendParams = [...timeParams];
+                } else {
+                    whereClause = timeCondition ? `WHERE user_id = ? ${timeCondition}` : 'WHERE user_id = ?';
+                    trendParams = [userId, ...timeParams];
+                }
+                
+                let workloadTrendQuery = '';
+                
+                if (timeFilter === 'week') {
+                    workloadTrendQuery = `
+                        SELECT 
+                            DATE(case_date) as date, 
+                            COUNT(*) as daily_count,
+                            SUM(CASE WHEN status = '已处理' THEN 1 ELSE 0 END) as completed_count,
+                            SUM(CASE WHEN status = '未处理' THEN 1 ELSE 0 END) as pending_count,
+                            SUM(CASE WHEN case_type = '开发商转移登记' THEN 1 ELSE 0 END) as developer_count
+                        FROM cases 
+                        ${whereClause}
+                        GROUP BY DATE(case_date)
+                        ORDER BY date
+                    `;
+                } else if (timeFilter === 'month') {
+                    workloadTrendQuery = `
+                        SELECT 
+                            WEEK(case_date) as week, 
+                            COUNT(*) as weekly_count,
+                            SUM(CASE WHEN status = '已处理' THEN 1 ELSE 0 END) as completed_count,
+                            SUM(CASE WHEN status = '未处理' THEN 1 ELSE 0 END) as pending_count,
+                            SUM(CASE WHEN case_type = '开发商转移登记' THEN 1 ELSE 0 END) as developer_count
+                        FROM cases 
+                        ${whereClause}
+                        GROUP BY WEEK(case_date)
+                        ORDER BY week
+                    `;
+                } else {
+                    // 年度数据，包括月度和季度统计
+                    workloadTrendQuery = `
+                        SELECT 
+                            MONTH(case_date) as month,
+                            QUARTER(case_date) as quarter,
+                            COUNT(*) as monthly_count,
+                            SUM(CASE WHEN status = '已处理' THEN 1 ELSE 0 END) as completed_count,
+                            SUM(CASE WHEN status = '未处理' THEN 1 ELSE 0 END) as pending_count,
+                            SUM(CASE WHEN case_type = '开发商转移登记' THEN 1 ELSE 0 END) as developer_count
+                        FROM cases 
+                        ${whereClause}
+                        GROUP BY MONTH(case_date), QUARTER(case_date)
+                        ORDER BY month
+                    `;
+                }
+                
+                const [trendResults] = await db.execute(workloadTrendQuery, trendParams);
+                workloadTrend = trendResults;
+                console.log('工作量趋势数据完成:', workloadTrend.length, '条记录');
+            } catch (error) {
+                console.error('获取工作量趋势数据错误:', error);
+                workloadTrend = [];
+            }
+            
+            // 6. 获取加权分配建议
+            try {
+                console.log('获取加权分配建议...');
+                weightedSuggestions = await getWeightedAllocationSuggestions(userId);
+            } catch (error) {
+                console.error('获取加权分配建议错误:', error);
+                weightedSuggestions = { recommendations: [], workloadAnalysis: '系统暂时无法提供分配建议' };
+            }
+            
+            // 7. 获取分角色统计数据
+            try {
+                console.log('获取分角色统计数据...');
+                roleStatistics = await getRoleStatistics(db, userId, userRole, timeCondition, timeParams);
+            } catch (error) {
+                console.error('获取分角色统计数据错误:', error);
+                roleStatistics = [];
+            }
+            
+            // 8. 获取开发商统计数据（仅管理员）
+            try {
+                console.log('获取开发商统计数据...');
+                developerStatistics = await getDeveloperStatistics(db, userId, userRole, timeCondition, timeParams);
+            } catch (error) {
+                console.error('获取开发商统计数据错误:', error);
+                developerStatistics = [];
+            }
+        } catch (queryError) {
+            console.error('统计数据查询错误:', queryError);
+            // 即使发生错误，我们也会继续构建响应
+        }
+        
+        // 构建用户角色映射
+        const userRoles = {};
+        users.forEach(user => {
+            userRoles[user.real_name] = user.role || '未知';
+        });
+
+        // 按角色分组统计（排除管理员角色）
+        const statsByRole = {};
+        receiverStats.forEach(stat => {
+            const role = userRoles[stat.receiver] || '未知';
+            // 排除管理员角色
+            if (role !== '管理员') {
+                if (!statsByRole[role]) {
+                    statsByRole[role] = [];
+                }
+                statsByRole[role].push(stat);
+            }
+        });
+
+        // 格式化收件人排行数据，按角色分组并内部排序
+        const receiverRanking = {};
+        Object.keys(statsByRole).forEach(role => {
+            // 按角色内部案件数量降序排序
+            const sortedStats = statsByRole[role].sort((a, b) => b.total_count - a.total_count);
+            
+            // 计算该角色内的总案件数
+            const roleTotalCases = sortedStats.reduce((sum, item) => sum + item.total_count, 0);
+            
+            // 格式化该角色的排行数据
+            receiverRanking[role] = sortedStats.map(item => ({
+                receiver: item.receiver,
+                total_count: item.total_count,
+                completed_count: item.completed_count || 0,
+                pending_count: item.pending_count || 0,
+                avg_processing_hours: item.avg_processing_hours || null,
+                high_priority_count: item.high_priority_count || 0,
+                high_complexity_count: item.high_complexity_count || 0,
+                total_estimated_duration: item.total_estimated_duration || 0,
+                // 计算完成率
+                completion_rate: item.total_count > 0 ? ((item.completed_count || 0) / item.total_count * 100).toFixed(1) : 0,
+                percentage: roleTotalCases > 0 ? ((item.total_count / roleTotalCases) * 100).toFixed(1) : 0,
+                type_breakdown: {
+                    '一般件': item.general_count,
+                    '开发商转移登记': item.transfer_developer_count,
+                    '国资': item.state_owned_count,
+                    '多人分割转让': item.multi_transfer_count,
+                    '其他复杂件': item.complex_count
+                },
+                // 工作量分数（综合考虑案件数量、优先级、复杂度和处理时长）
+                workload_score: Math.round(
+                    (item.total_count * 0.4) + 
+                    ((item.high_priority_count || 0) * 2) + 
+                    ((item.high_complexity_count || 0) * 1.5) + 
+                    ((item.total_estimated_duration || 0) / 10)
+                )
+            }));
+        });
+        
+        // 计算总案件数（排除管理员的案件）
+        let totalCases = 0;
+        Object.values(receiverRanking).forEach(roleStats => {
+            roleStats.forEach(item => {
+                totalCases += item.total_count;
+            });
+        });
+        
+        // 如果没有按角色的排行数据，使用原始格式作为后备（但仍排除管理员）
+        if (Object.keys(receiverRanking).length === 0) {
+            const filteredStats = receiverStats
+                .filter(stat => userRoles[stat.receiver] !== '管理员') // 排除管理员
+                .sort((a, b) => b.total_count - a.total_count);
+            
+            // 重新计算总案件数
+            totalCases = filteredStats.reduce((sum, item) => sum + item.total_count, 0);
+            
+            receiverRanking['默认'] = filteredStats.map(item => ({
+                receiver: item.receiver,
+                total_count: item.total_count,
+                completed_count: item.completed_count || 0,
+                pending_count: item.pending_count || 0,
+                avg_processing_hours: item.avg_processing_hours || null,
+                high_priority_count: item.high_priority_count || 0,
+                high_complexity_count: item.high_complexity_count || 0,
+                total_estimated_duration: item.total_estimated_duration || 0,
+                completion_rate: item.total_count > 0 ? ((item.completed_count || 0) / item.total_count * 100).toFixed(1) : 0,
+                percentage: totalCases > 0 ? ((item.total_count / totalCases) * 100).toFixed(1) : 0,
+                type_breakdown: {
+                    '一般件': item.general_count,
+                    '开发商转移登记': item.transfer_developer_count,
+                    '国资': item.state_owned_count,
+                    '多人分割转让': item.multi_transfer_count,
+                    '其他复杂件': item.complex_count
+                },
+                // 工作量分数（综合考虑案件数量、优先级、复杂度和处理时长）
+                workload_score: Math.round(
+                    (item.total_count * 0.4) + 
+                    ((item.high_priority_count || 0) * 2) + 
+                    ((item.high_complexity_count || 0) * 1.5) + 
+                    ((item.total_estimated_duration || 0) / 10)
+                )
+            }));
+        }
+        
+        console.log('统计数据处理完成，准备返回响应');
+
+        // 计算本月收件总数（针对管理员）
+        let monthlyTotalCases = 0;
+        if (userRole === '管理员') {
+            try {
+                const monthlyQuery = `
+                    SELECT COUNT(*) as count 
+                    FROM cases 
+                    WHERE MONTH(case_date) = MONTH(NOW()) AND YEAR(case_date) = YEAR(NOW())
+                `;
+                const [monthlyResult] = await db.execute(monthlyQuery);
+                monthlyTotalCases = monthlyResult[0].count || 0;
+            } catch (error) {
+                console.error('计算本月收件总数错误:', error);
+                monthlyTotalCases = 0;
+            }
+        }
+
+        // 返回成功响应，使用统一的格式
+        res.json({
+            success: true,
+            data: {
+                user_info: {
+                    ...userInfo[0],
+                    // 根据需求，管理员不显示current_workload
+                    current_workload: userRole === '管理员' ? null : userInfo[0].current_workload
+                },
+                type_statistics: typeStats,
+                workload_trend: workloadTrend,
+                receiver_ranking: receiverRanking,
+                role_statistics: roleStatistics,
+                developer_statistics: developerStatistics,
+                total_cases: totalCases,
+                monthly_total_cases: monthlyTotalCases, // 新增本月收件总数
+                allocation_analysis: allocationAnalysis,
+                weighted_suggestions: weightedSuggestions,
+                time_filter: timeFilter,
+                time_params: { year, month },
+                user_role: userRole
+            }
+        });
+    } catch (error) {
+        // 添加详细的错误日志，方便调试
+        console.error('========== 获取统计数据错误详情 ==========');
+        console.error('错误类型:', error.name);
+        console.error('错误消息:', error.message);
+        console.error('错误代码:', error.code);
+        console.error('错误SQL:', error.sql);
+        console.error('错误堆栈:', error.stack);
+        console.error('======================================');
+        
+        // 返回友好的错误响应，并提供默认数据结构以确保前端可以正常渲染
+        res.status(200).json({
+            success: false,
+            message: '获取统计数据时发生错误，但系统已提供基础数据以保证界面正常显示',
+            data: {
+                user_info: { 
+                    real_name: req.user?.real_name || '未知用户', 
+                    expertise_level: '未知', 
+                    current_workload: req.user?.role === '管理员' ? null : 0, 
+                    max_workload: 0 
+                },
+                type_statistics: [],
+                workload_trend: [],
+                receiver_ranking: {},
+                role_statistics: [],
+                developer_statistics: [],
+                total_cases: 0,
+                monthly_total_cases: 0, // 新增本月收件总数默认值
+                allocation_analysis: [],
+                weighted_suggestions: { recommendations: ['系统暂时无法提供分配建议'], workloadAnalysis: '暂无数据' },
+                time_filter: req.query.timeFilter || 'month',
+                time_params: { 
+                    year: req.query.year,
+                    month: req.query.month 
+                },
+                user_role: req.user?.role || '未知角色'
+            }
+        });
+    }
+}
+
+
+// 获取案件类型统计数据
+async function getCasesByType(db, userId, timeCondition, timeParams, userRole = null) {
+    try {
+        let baseQuery = `
+            SELECT 
+                case_type,
+                COUNT(id) as count,
+                SUM(CASE WHEN status = '已处理' THEN 1 ELSE 0 END) as completed_count,
+                SUM(CASE WHEN status = '未处理' THEN 1 ELSE 0 END) as pending_count,
+                AVG(TIMESTAMPDIFF(HOUR, created_at, updated_at)) as avg_processing_hours
+            FROM 
+                cases
+        `;
+        
+        // 根据用户角色构建查询条件
+        let params = [];
+        let whereCondition = '';
+        
+        if (userRole === '管理员') {
+            // 管理员可以看到所有数据
+            if (timeCondition) {
+                whereCondition = `WHERE ${timeCondition.substring(4)}`; // 移除AND前缀
+                params = [...timeParams];
+            }
+        } else {
+            // 普通用户只能看到自己的数据
+            if (timeCondition) {
+                whereCondition = `WHERE user_id = ? ${timeCondition}`; // timeCondition已包含AND前缀
+                params = [userId, ...timeParams];
+            } else {
+                whereCondition = 'WHERE user_id = ?';
+                params = [userId];
+            }
+        }
+        
+        if (whereCondition) {
+            baseQuery += ' ' + whereCondition;
+        }
+        
+        // 添加按类型分组和排序
+        baseQuery += `
+            GROUP BY 
+                case_type
+            ORDER BY 
+                count DESC;
+        `;
+        
+        const [results] = await db.execute(baseQuery, params);
+        return results;
+    } catch (error) {
+        console.error('获取案件类型统计失败:', error);
+        throw error;
+    }
+}
+
+// 获取分角色统计数据（排除管理员角色）
+async function getRoleStatistics(db, userId, userRole, timeCondition, timeParams) {
+    try {
+        // 修复WHERE条件构建，避免语法错误
+        let whereClause = '';
+        let subqueryWhereClause = '';
+        let queryParams = [];
+        let roleCondition = userRole === '管理员' ? 'AND u.role != \'管理员\'' : '';
+        
+        if (userRole === '管理员') {
+            whereClause = timeCondition ? `WHERE ${timeCondition.substring(4)}` : ''; // 移除AND前缀
+            subqueryWhereClause = timeCondition ? `WHERE ${timeCondition.substring(4)}` : '';
+            queryParams = [...timeParams];
+        } else {
+            whereClause = timeCondition ? `WHERE c.user_id = ? ${timeCondition}` : 'WHERE c.user_id = ?';
+            subqueryWhereClause = timeCondition ? `WHERE user_id = ? ${timeCondition}` : 'WHERE user_id = ?';
+            queryParams = [userId, ...timeParams];
+        }
+        
+        const query = `
+            SELECT 
+                u.role as role_name,
+                COUNT(c.id) as case_count,
+                JSON_ARRAYAGG(
+                    JSON_OBJECT(
+                        'receiver', u.real_name,
+                        'case_count', user_counts.user_count
+                    )
+                ) as receivers
+            FROM 
+                cases c
+            JOIN 
+                users u ON c.user_id = u.id
+            JOIN (
+                SELECT 
+                    user_id,
+                    COUNT(id) as user_count
+                FROM 
+                    cases
+                ${subqueryWhereClause}
+                GROUP BY 
+                    user_id
+            ) user_counts ON c.user_id = user_counts.user_id
+            ${whereClause}
+            ${roleCondition}
+            GROUP BY 
+                u.role
+            ORDER BY 
+                case_count DESC;
+        `;
+        
+        const [results] = await db.execute(query, queryParams);
+        
+        // 计算每个角色的占比
+        const totalCount = results.reduce((sum, role) => sum + role.case_count, 0);
+        
+        return results.map(role => ({
+            role_name: role.role_name,
+            case_count: role.case_count,
+            percentage: totalCount > 0 ? ((role.case_count / totalCount) * 100).toFixed(2) : '0.00',
+            receivers: typeof role.receivers === 'string' ? JSON.parse(role.receivers || '[]') : (role.receivers || [])
+        }));
+    } catch (error) {
+        console.error('获取分角色统计数据错误:', error);
+        return [];
+    }
+}
+
+// 获取开发商统计数据
+async function getDeveloperStatistics(db, userId, userRole, timeCondition, timeParams) {
+    // 只有管理员可以查看所有开发商统计
+    if (userRole !== '管理员') {
+        return [];
+    }
+    
+    // 修复查询，添加时间筛选条件
+    let whereClause = 'WHERE c.case_type = "开发商转移登记"';
+    let queryParams = [];
+    
+    if (timeCondition && typeof timeCondition === 'string') {
+        // 安全地移除timeCondition的前缀"AND"后添加到whereClause
+        const condition = timeCondition.trim();
+        if (condition.startsWith('AND')) {
+            whereClause += ` ${condition.substring(3)}`;
+        } else {
+            whereClause += ` ${condition}`;
+        }
+        // 确保timeParams是数组
+        if (Array.isArray(timeParams)) {
+            queryParams = [...timeParams];
+        }
+    }
+    
+    // 修改查询，使用case_number作为开发者标识，因为表中没有case_content字段
+    // 按case_number分组，这样可以统计每个案件编号相关的开发商转移登记案件
+    const query = `
+        SELECT 
+            c.case_number as developer_name, -- 使用case_number替代不存在的case_content
+            COUNT(*) as total_count,
+            SUM(CASE WHEN c.status = '已处理' THEN 1 ELSE 0 END) as completed_count,
+            SUM(CASE WHEN c.status = '未处理' THEN 1 ELSE 0 END) as pending_count,
+            AVG(CASE 
+                WHEN c.status = '已处理' 
+                THEN TIMESTAMPDIFF(HOUR, c.created_at, c.updated_at) 
+                ELSE NULL 
+            END) as avg_processing_hours,
+            GROUP_CONCAT(DISTINCT u.real_name) as handled_by,
+            MAX(c.case_date) as latest_case_date
+        FROM cases c
+        JOIN users u ON c.user_id = u.id
+        ${whereClause}
+        GROUP BY c.case_number
+        ORDER BY total_count DESC
+    `;
+    
+    try {
+        const [results] = await db.execute(query, queryParams);
+        
+        // 格式化数据
+        return results.map(item => ({
+            ...item,
+            completion_rate: item.total_count > 0 ? Math.round((item.completed_count / item.total_count) * 100) : 0,
+            avg_processing_hours: item.avg_processing_hours ? parseFloat(item.avg_processing_hours.toFixed(2)) : 0
+        }));
+    } catch (error) {
+        console.error('获取开发商统计失败:', error);
+        return [];
+    }
+}
+
+// 获取加权分配建议
+async function getWeightedAllocationSuggestions(userId) {
+    try {
+        // 获取用户当前工作负载信息
+        const [users] = await db.execute('SELECT * FROM users WHERE id = ?', [userId]);
+        if (users.length === 0) {
+            throw new Error('用户不存在');
+        }
+        
+        const userInfo = users[0];
+        
+        // 使用parallelQueries并行执行多个查询
+        const [recentCasesResults, allUsersStatsResults] = await parallelQueries([
+            [`SELECT 
+                COUNT(*) as total_cases,
+                SUM(CASE WHEN case_type = '一般件' THEN 1 ELSE 0 END) as normal_cases,
+                SUM(CASE WHEN case_type != '一般件' THEN 1 ELSE 0 END) as complex_cases,
+                -- 计算近期活跃度（最近7天案件数）
+                SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as recent_activity
+            FROM cases 
+            WHERE receiver = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)`, [userInfo.real_name]],
+            
+            [`SELECT 
+                receiver,
+                COUNT(*) as total_cases,
+                SUM(CASE WHEN case_type = '一般件' THEN 1 ELSE 0 END) as normal_cases,
+                SUM(CASE WHEN case_type != '一般件' THEN 1 ELSE 0 END) as complex_cases
+            FROM cases 
+            WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+            GROUP BY receiver`, []]
+        ], db);
+        
+        const caseStats = recentCasesResults[0];
+        const allUsersStats = allUsersStatsResults;
+        
+        // 计算平均分配情况
+        const avgNormalCases = allUsersStats.reduce((sum, user) => sum + user.normal_cases, 0) / allUsersStats.length;
+        const avgComplexCases = allUsersStats.reduce((sum, user) => sum + user.complex_cases, 0) / allUsersStats.length;
+        
+        // 生成平均分配分析
+        let workloadAnalysis = '';
+        let recommendations = [];
+        
+        // 分析一般件分配情况
+        if (caseStats.normal_cases > avgNormalCases + 2) {
+            recommendations.push('您处理的一般件数量较多，建议减少一般件接收');
+        } else if (caseStats.normal_cases < avgNormalCases - 2) {
+            recommendations.push('您处理的一般件数量较少，可以接收更多一般件');
+        }
+        
+        // 分析复杂件分配情况
+        if (caseStats.complex_cases > avgComplexCases + 2) {
+            recommendations.push('您处理的复杂件数量较多，建议减少复杂件接收');
+        } else if (caseStats.complex_cases < avgComplexCases - 2) {
+            recommendations.push('您处理的复杂件数量较少，可以接收更多复杂件');
+        }
+        
+        // 活跃度分析
+        if (caseStats.recent_activity === 0) {
+            recommendations.push('近期未处理案件，建议积极参与案件处理');
+        }
+        
+        // 生成整体分析
+        if (recommendations.length === 0) {
+            workloadAnalysis = '当前案件分配较为均衡，继续保持';
+        } else {
+            workloadAnalysis = '根据平均分配原则分析';
+        }
+        
+        return {
+            user_id: userId,
+            recent_case_stats: {
+                total: caseStats.total_cases,
+                normal: caseStats.normal_cases,
+                complex: caseStats.complex_cases,
+                recent_activity: caseStats.recent_activity
+            },
+            average_distribution: {
+                avg_normal_cases: parseFloat(avgNormalCases.toFixed(1)),
+                avg_complex_cases: parseFloat(avgComplexCases.toFixed(1))
+            },
+            workload_analysis: workloadAnalysis,
+            recommendations: recommendations
+        };
+    } catch (error) {
+        console.error('获取加权分配建议错误:', error);
+        return {
+            user_id: userId,
+            error: '获取分配建议失败',
+            recommendations: ['系统无法获取分析数据，请稍后再试']
+        };
+    }
+}
+
+// 新增：智能推荐下一个收件人算法
+async function getNextCaseReceiver(userId, caseType = null, priority = null, complexity = null) {
+    try {
+        // 检查是否为国资或企业类型案件
+        const isSpecialCaseType = caseType === '国资' || caseType === '企业';
+        const isDeveloperCaseType = caseType === '开发商转移登记';
+        
+        // 根据案件类型选择对应的角色
+        let queryParams;
+        let query;
+        
+        if (isSpecialCaseType) {
+            // 国资、企业类型：只从国资企业专窗角色获取
+            query = 'SELECT real_name FROM users WHERE role = ?';
+            queryParams = ['国资企业专窗'];
+            console.log(`案件类型: ${caseType}, 从国资企业专窗角色获取收件人`);
+        } else if (isDeveloperCaseType) {
+            // 开发商转移登记类型：从收件人和国资企业专窗角色获取
+            query = 'SELECT real_name FROM users WHERE role = ? OR role = ?';
+            queryParams = ['收件人', '国资企业专窗'];
+            console.log(`案件类型: ${caseType}, 从收件人和国资企业专窗角色获取收件人`);
+        } else {
+            // 其他类型：只从收件人角色获取
+            query = 'SELECT real_name FROM users WHERE role = ?';
+            queryParams = ['收件人'];
+            console.log(`案件类型: ${caseType}, 从收件人角色获取收件人`);
+        }
+        
+        // 获取对应的角色用户
+        const [receiversOnly] = await db.execute(query, queryParams);
+        
+        // 提取收件人姓名列表
+        const validReceivers = receiversOnly.map(user => user.real_name);
+        
+        // 如果没有有效的收件人，返回默认推荐
+        if (validReceivers.length === 0) {
+            console.log(`没有找到符合条件的收件人用户`);
+            return getDefaultRecommendation().recommendations;
+        }
+        
+        // 获取收件人及其实时统计信息（最近30天），只考虑有效的收件人
+        // 修复：正确处理IN子句的数组参数
+        let receiversQuery = `
+            SELECT 
+                receiver,
+                COUNT(*) as recent_cases,
+                SUM(CASE WHEN case_type = '一般件' THEN 1 ELSE 0 END) as normal_case_count,
+                SUM(CASE WHEN case_type != '一般件' THEN 1 ELSE 0 END) as complex_case_count,
+                SUM(CASE WHEN case_type = ? THEN 1 ELSE 0 END) as type_match_count,
+                -- 计算最近活跃度（最近7天案件数）
+                SUM(CASE WHEN case_date >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) as recent_activity
+            FROM cases 
+            WHERE case_date >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        `;
+        
+        let receiversParams = [caseType];
+        
+        // 安全处理IN子句
+        if (validReceivers.length > 0) {
+            // 为数组中的每个元素创建占位符
+            const placeholders = validReceivers.map(() => '?').join(',');
+            receiversQuery += ` AND receiver IN (${placeholders})`;
+            receiversParams = [...receiversParams, ...validReceivers];
+        } else {
+            // 如果没有有效的收件人，添加一个永远不会匹配的条件
+            receiversQuery += ' AND 1 = 0';
+        }
+        
+        receiversQuery += ` GROUP BY receiver HAVING recent_cases > 0`;
+        
+        console.log('执行收件人查询:', receiversQuery);
+        console.log('查询参数数量:', receiversParams.length);
+        
+        const [receivers] = await db.execute(receiversQuery, receiversParams);
+        
+        // 获取所有用户信息
+        const [allUsers] = await db.execute('SELECT id, username, real_name FROM users');
+        
+        // 如果没有历史数据，返回默认推荐
+        if (receivers.length === 0) {
+            return getDefaultRecommendation().recommendations;
+        }
+
+        // 计算每个收件人的推荐分数 - 基于平均分配原则
+        const recommendations = receivers.map(receiver => {
+            let recommendationScore = 0;
+            const reasons = [];
+            const factors = [];
+
+            // 1. 案件类型匹配度（50%权重）- 保留类型匹配
+            const typeMatchScore = receiver.type_match_count > 0 ? 1.0 : 0.5;
+            recommendationScore += typeMatchScore * 0.50;
+            factors.push({ name: '类型匹配', score: typeMatchScore, weight: 0.50 });
+            if (caseType && receiver.type_match_count > 0) {
+                reasons.push(`擅长处理${caseType}类型案件`);
+            } else if (caseType) {
+                reasons.push(`可处理${caseType}类型案件`);
+            }
+
+            // 2. 近期活跃度（50%权重）- 保留活跃度因素，最不活跃的收件人优先派件
+            const maxRecentActivity = Math.max(...receivers.map(r => r.recent_activity));
+            // 活跃度越低，分数越高（归一化处理）
+            const activityScore = maxRecentActivity > 0 ? 
+                1 - (receiver.recent_activity / maxRecentActivity) : 1.0;
+            recommendationScore += activityScore * 0.50;
+            factors.push({ name: '近期活跃', score: activityScore, weight: 0.50 });
+            if (receiver.recent_activity === 0) {
+                reasons.push('近期未派件，优先考虑');
+            } else if (receiver.recent_activity < maxRecentActivity / 2) {
+                reasons.push(`近期活跃度较低（${receiver.recent_activity}件）`);
+            }
+
+            // 3. 平均分配调整 - 根据案件类型进行特殊处理
+            let distributionAdjustment = 0;
+            
+            if (caseType === '一般件') {
+                // 一般件：优先分配给一般件数量较少的收件人
+                const minNormalCases = Math.min(...receivers.map(r => r.normal_case_count));
+                if (receiver.normal_case_count <= minNormalCases + 1) {
+                    distributionAdjustment += 0.2;
+                    reasons.push('一般件数量较少，优先分配');
+                }
+            } else {
+                // 非一般件：优先分配给复杂件数量较少的收件人
+                const minComplexCases = Math.min(...receivers.map(r => r.complex_case_count));
+                if (receiver.complex_case_count <= minComplexCases + 1) {
+                    distributionAdjustment += 0.2;
+                    reasons.push('复杂件数量较少，优先分配');
+                }
+            }
+
+            // 最终推荐分数（0-1之间）
+            const finalScore = Math.min(recommendationScore + distributionAdjustment, 1.0);
+
+            return {
+                receiver: receiver.receiver,
+                score: parseFloat(finalScore.toFixed(3)),
+                factors: factors,
+                reasons: reasons.length > 0 ? reasons : ['综合表现良好'],
+                recommendation_level: getNextCaseRecommendationLevel(finalScore),
+                stats: {
+                    recent_cases: receiver.recent_cases,
+                    normal_case_count: receiver.normal_case_count,
+                    complex_case_count: receiver.complex_case_count,
+                    type_match: receiver.type_match_count,
+                    recent_activity: receiver.recent_activity
+                }
+            };
+        });
+
+        // 按推荐分数降序排列，取前5名
+        const topRecommendations = recommendations
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5);
+        
+        // 如果没有找到推荐，返回默认推荐
+        if (topRecommendations.length === 0) {
+            return getDefaultRecommendation().recommendations;
+        }
+
+        // 直接返回推荐列表
+        return topRecommendations;
+
+    } catch (error) {
+        console.error('获取下一个收件人推荐错误:', error);
+        return getDefaultRecommendation().recommendations;
+    }
+}
+
+// 计算工作负载得分（负载越低得分越高）
+function calculateWorkloadScore(currentWorkload, maxWorkload) {
+    const utilization = currentWorkload / maxWorkload;
+    if (utilization < 0.3) return 1.0;      // 负载很低，优先推荐
+    if (utilization < 0.6) return 0.7;      // 负载适中
+    if (utilization < 0.8) return 0.4;       // 负载较高
+    return 0.1;                              // 负载很高，谨慎推荐
+}
+
+// 获取默认推荐（当没有数据时）
+function getDefaultRecommendation() {
+    const defaultReceivers = ['张三', '李四', '王五', '赵六'];
+    return {
+        recommendations: defaultReceivers.map((receiver, index) => ({
+            receiver: receiver,
+            score: parseFloat((0.8 - index * 0.1).toFixed(3)),
+            factors: [{ name: '默认推荐', score: 0.8, weight: 1.0 }],
+            reasons: ['系统默认推荐'],
+            recommendation_level: index === 0 ? '推荐' : '一般推荐',
+            stats: { recent_cases: 0, avg_weight: 0, type_match: 0, recent_activity: 0 }
+        })),
+        case_context: { type: null, priority: null, complexity: null },
+        user_workload: {
+            current: 0,
+            max: 100,
+            utilization: '0.0'
+        }
+    };
+}
+
+// 获取下一个案件推荐等级
+function getNextCaseRecommendationLevel(score) {
+    if (score >= 0.90) return '最佳人选';
+    if (score >= 0.80) return '推荐人选';
+    if (score >= 0.70) return '合适人选';
+    if (score >= 0.50) return '可考虑人选';
+    return '备选人选';
+}
+
+// 新增：获取下一个收件人推荐API接口
+router.get('/next-case-receiver', authenticateToken, async (req, res) => {
+    try {
+        const { caseType } = req.query;
+        const userId = req.user.id;
+
+        const recommendation = await getNextCaseReceiver(
+            userId, 
+            caseType || null
+        );
+        
+        res.json({
+            success: true,
+            data: {
+                recommendations: recommendation,
+                // 添加前端期望的其他字段
+                user_workload: {
+                    current: 0,
+                    max: 100,
+                    utilization: '0.0'
+                },
+                case_context: {
+                    type: null,
+                    priority: null,
+                    complexity: null
+                }
+            },
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('获取下一个收件人推荐错误:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: '服务器内部错误',
+            data: getDefaultRecommendation()
+        });
+    }
+});
+
+// 兼容前端的推荐收件人接口
+router.get('/recommended-receivers', authenticateToken, async (req, res) => {
+    try {
+        const { case_type: caseType, priority, complexity } = req.query;
+        const userId = req.user.id;
+        const userRole = req.user.role;
+
+        console.log('获取推荐收件人请求:', { userId, userRole, caseType, priority, complexity });
+        
+        // 系统管理员不需要推荐收件人功能，直接返回空结果
+        if (userRole === '管理员') {
+            console.log('系统管理员访问推荐收件人接口，直接返回特殊结果');
+            return res.json({
+                success: true,
+                data: {
+                    recommendations: [],
+                    message: '系统管理员不需要推荐收件人功能'
+                },
+                message: '系统管理员不需要推荐收件人功能，可直接分配案件',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // 非管理员用户继续使用推荐算法
+        console.log('非管理员用户，执行推荐算法');
+        const recommendation = await getNextCaseReceiver(
+            userId, 
+            caseType || null, 
+            priority ? parseInt(priority) : null,
+            complexity ? parseInt(complexity) : null
+        );
+        
+        // 返回推荐列表（格式适配前端）
+        res.json({
+            success: true,
+            data: {
+                recommendations: recommendation
+            },
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        console.error('获取推荐收件人错误:', error);
+        
+        // 为管理员提供特殊的错误处理
+        if (req.user.role === '管理员') {
+            return res.json({
+                success: true,
+                data: {
+                    recommendations: [],
+                    message: '系统管理员不需要推荐收件人功能'
+                },
+                message: '系统管理员不需要推荐收件人功能，可直接分配案件',
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        res.status(500).json({ 
+            success: false, 
+            error: '服务器内部错误',
+            data: []
+        });
+    }
+})
+
+// 获取所有收件记录（管理员权限）
+// 修改为允许管理员访问，与系统中其他权限检查保持一致
+router.get('/all-cases', authenticateToken, async (req, res) => {
+    // 检查是否为管理员角色，使用与verifyAdmin中间件一致的中文角色名称
+    if (req.user.role !== '管理员') {
+        return res.status(403).json({ error: '权限不足，需要管理员权限' });
+    }
+    try {
+        const { page = 1, limit = 10, startDate, endDate, caseType, sortField, sortOrder } = req.query;
+        
+        console.log('获取所有收件记录请求:', { page, limit, startDate, endDate, caseType, sortField, sortOrder });
+        
+        // 构建基础SQL查询
+        let query = `
+            SELECT c.*, u.real_name 
+            FROM cases c 
+            JOIN users u ON c.user_id = u.id 
+            WHERE 1=1
+        `;
+        const params = [];
+        
+        // 添加日期过滤条件
+        if (startDate && endDate) {
+            query += ' AND c.case_date BETWEEN ? AND ?';
+            params.push(startDate, endDate);
+        }
+        
+        // 添加案件类型过滤条件
+        if (caseType) {
+            query += ' AND c.case_type = ?';
+            params.push(caseType);
+        }
+        
+        // 动态排序逻辑 - 支持多字段排序
+        const validSortFields = [
+            'case_date', 'created_at', 'id', 'case_number', 
+            'client_name', 'case_type', 'estimated_duration', 'user_id'
+        ];
+        
+        let orderByClause = [];
+        
+        // 处理排序字段（支持逗号分隔的多字段排序）
+        if (sortField) {
+            const fields = sortField.split(',').map(field => field.trim());
+            const orders = sortOrder ? sortOrder.split(',').map(order => order.trim().toUpperCase()) : [];
+            
+            fields.forEach((field, index) => {
+                if (validSortFields.includes(field)) {
+                    const order = orders[index] === 'ASC' ? 'ASC' : 'DESC';
+                    orderByClause.push(`c.${field} ${order}`);
+                }
+            });
+        }
+        
+        // 如果没有指定有效的排序字段，使用默认排序
+        if (orderByClause.length === 0) {
+            orderByClause = ['c.case_date DESC', 'c.created_at DESC', 'c.id DESC'];
+        }
+        
+        // 添加排序子句
+        query += ' ORDER BY ' + orderByClause.join(', ');
+        
+        // 添加分页
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+        query += ' LIMIT ? OFFSET ?';
+        params.push(parseInt(limit), offset);
+        
+        console.log('执行SQL查询:', query, params);
+        
+        // 执行查询获取数据
+        const [cases] = await db.execute(query, params);
+        
+        // 获取总数
+        let countQuery = 'SELECT COUNT(*) as total FROM cases WHERE 1=1';
+        const countParams = [];
+        
+        if (startDate && endDate) {
+            countQuery += ' AND case_date BETWEEN ? AND ?';
+            countParams.push(startDate, endDate);
+        }
+        if (caseType) {
+            countQuery += ' AND case_type = ?';
+            countParams.push(caseType);
+        }
+        
+        const [countResult] = await db.execute(countQuery, countParams);
+        const total = countResult[0].total;
+        
+        console.log('查询成功，返回记录数:', cases.length, '总记录数:', total);
+
+        res.json({
+            cases,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total,
+                totalPages: Math.ceil(total / parseInt(limit))
+            }
+        });
+    } catch (error) {
+        // 添加详细的错误日志
+        console.error('========== 获取所有收件记录错误详情 ==========');
+        console.error('错误对象:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+        console.error('错误消息:', error.message);
+        console.error('错误代码:', error.code);
+        console.error('错误SQL:', error.sql);
+        console.error('错误堆栈:', error.stack);
+        console.error('======================================');
+        
+        // 返回更详细的错误信息
+        res.status(500).json({
+            error: '服务器内部错误',
+            message: '获取所有收件记录失败',
+            errorCode: error.code,
+            errorMessage: error.message
+        });
+    }
+});
+
+// 获取单个收件详情（支持所有角色查看自己的收件）
+router.get('/cases/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+        const userRole = req.user.role;
+        
+        let query = 'SELECT c.*, u.real_name FROM cases c JOIN users u ON c.user_id = u.id WHERE c.id = ?';
+        const params = [id];
+        
+        // 如果不是管理员，只能查看自己的收件
+        if (userRole !== '管理员') {
+            query += ' AND c.user_id = ?';
+            params.push(userId);
+        }
+        
+        const [cases] = await db.execute(query, params);
+        
+        if (cases.length === 0) {
+            return res.status(404).json({ error: '收件记录不存在' });
+        }
+        
+        res.json({ case: cases[0] });
+    } catch (error) {
+        console.error('获取收件详情错误:', error);
+        res.status(500).json({ error: '服务器内部错误' });
+    }
+});
+
+// 导出路由
+export default router;
