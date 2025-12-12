@@ -10,10 +10,9 @@
       <el-form :inline="true" :model="searchForm" class="demo-form-inline">
         <el-form-item label="案件类型">
           <el-select v-model="searchForm.caseType" placeholder="请选择案件类型" clearable>
-            <el-option label="国有划拨" value="国有划拨"></el-option>
-            <el-option label="国有出让" value="国有出让"></el-option>
-            <el-option label="集体土地" value="集体土地"></el-option>
-            <el-option label="宅基地" value="宅基地"></el-option>
+            <el-option label="一般件" value="一般件"></el-option>
+            <el-option label="开发商转移" value="开发商转移"></el-option>
+            <el-option label="开发商转移登记" value="开发商转移登记"></el-option>
             <el-option label="其他" value="其他"></el-option>
           </el-select>
         </el-form-item>
