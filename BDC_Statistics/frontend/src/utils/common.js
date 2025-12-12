@@ -11,12 +11,34 @@
 export const formatDate = (date) => {
   if (!date) return '-';
   
-  const d = new Date(date);
-  const year = d.getFullYear();
-  const month = d.getMonth() + 1;
-  const day = d.getDate();
+  // 检查是否已经是YYYY-MM-DD格式的字符串
+  const dateRegex = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const match = dateRegex.test(date) ? date.match(dateRegex) : null;
   
-  return `${year}年${month}月${day}日`;
+  if (match) {
+    // 已经是正确格式，直接提取年、月、日，避免时区转换问题
+    const year = parseInt(match[1]);
+    const month = parseInt(match[2]);
+    const day = parseInt(match[3]);
+    
+    return `${year}年${month}月${day}日`;
+  } else {
+    // 对于其他格式，使用Date对象解析
+    const d = new Date(date);
+    
+    // 确保日期有效
+    if (isNaN(d.getTime())) {
+      return '-';
+    }
+    
+    // 使用本地日期格式化，并指定时区，避免时区转换问题
+    return d.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      timeZone: 'Asia/Shanghai'
+    });
+  }
 };
 
 /**
@@ -28,7 +50,16 @@ export const formatDateTime = (date) => {
   if (!date) return '-';
   
   const d = new Date(date);
-  return d.toLocaleString('zh-CN');
+  
+  // 确保日期有效
+  if (isNaN(d.getTime())) {
+    return '-';
+  }
+  
+  // 使用本地日期时间格式化，并指定时区，避免时区转换问题
+  return d.toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai'
+  });
 };
 
 /**

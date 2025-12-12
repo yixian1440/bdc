@@ -251,8 +251,23 @@ export default {
         const cases = casesResponse.cases || []
         
         const monthlyCases = cases.filter(caseItem => {
-          const caseDate = new Date(caseItem.case_date)
-          return caseDate.getMonth() === currentMonth && caseDate.getFullYear() === currentYear
+            // 处理日期，确保正确解析YYYY-MM-DD格式
+            const caseDateStr = caseItem.case_date
+            if (!caseDateStr) return false
+            
+            // 检查是否是YYYY-MM-DD格式的字符串
+            const dateRegex = /^(\d{4})-(\d{2})-(\d{2})$/;
+            const match = caseDateStr.match(dateRegex);
+            if (match) {
+                // 直接从字符串中提取年、月、日，避免时区转换问题
+                const year = parseInt(match[1]);
+                const month = parseInt(match[2]) - 1; // 转换为0-11的月份
+                return month === currentMonth && year === currentYear;
+            } else {
+                // 对于其他格式，使用Date对象解析
+                const caseDate = new Date(caseDateStr);
+                return caseDate.getMonth() === currentMonth && caseDate.getFullYear() === currentYear;
+            }
         }).length
         
         dashboardStats.value = {

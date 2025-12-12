@@ -226,11 +226,39 @@ router.get('/my-cases', authenticateToken, async (req, res) => {
         // 转换数据格式，确保符合前端预期
         const formattedCases = cases.map(caseItem => ({
             ...caseItem,
-            // 确保日期格式正确
-            case_date: caseItem.case_date ? caseItem.case_date.toISOString().split('T')[0] : null,
-            created_at: caseItem.created_at ? caseItem.created_at.toISOString().split('T')[0] : null,
-            updated_at: caseItem.updated_at ? caseItem.updated_at.toISOString().split('T')[0] : null,
-            completed_at: caseItem.completed_at ? caseItem.completed_at.toISOString().split('T')[0] : null,
+            // 确保日期格式正确，使用本地时间而非UTC时间
+            case_date: caseItem.case_date ? 
+                (typeof caseItem.case_date === 'string' ? caseItem.case_date : 
+                caseItem.case_date.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-')) : null,
+            created_at: caseItem.created_at ? 
+                (typeof caseItem.created_at === 'string' ? caseItem.created_at : 
+                caseItem.created_at.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-')) : null,
+            updated_at: caseItem.updated_at ? 
+                (typeof caseItem.updated_at === 'string' ? caseItem.updated_at : 
+                caseItem.updated_at.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-')) : null,
+            completed_at: caseItem.completed_at ? 
+                (typeof caseItem.completed_at === 'string' ? caseItem.completed_at : 
+                caseItem.completed_at.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-')) : null,
             // 确保handler_name始终有值
             handler_name: caseItem.handler_name || caseItem.creator_name || '未知',
             // 添加前端可能需要的额外字段
@@ -633,10 +661,39 @@ router.get('/all-cases', authenticateToken, async (req, res) => {
         // 转换数据格式，确保符合前端预期
         const formattedCases = cases.map(caseItem => ({
             ...caseItem,
-            case_date: caseItem.case_date ? caseItem.case_date.toISOString().split('T')[0] : null,
-            created_at: caseItem.created_at ? caseItem.created_at.toISOString().split('T')[0] : null,
-            updated_at: caseItem.updated_at ? caseItem.updated_at.toISOString().split('T')[0] : null,
-            completed_at: caseItem.completed_at ? caseItem.completed_at.toISOString().split('T')[0] : null,
+            // 确保日期格式正确，使用本地时间而非UTC时间
+            case_date: caseItem.case_date ? 
+                (typeof caseItem.case_date === 'string' ? caseItem.case_date : 
+                caseItem.case_date.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-')) : null,
+            created_at: caseItem.created_at ? 
+                (typeof caseItem.created_at === 'string' ? caseItem.created_at : 
+                caseItem.created_at.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-')) : null,
+            updated_at: caseItem.updated_at ? 
+                (typeof caseItem.updated_at === 'string' ? caseItem.updated_at : 
+                caseItem.updated_at.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-')) : null,
+            completed_at: caseItem.completed_at ? 
+                (typeof caseItem.completed_at === 'string' ? caseItem.completed_at : 
+                caseItem.completed_at.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-')) : null,
             handler_name: caseItem.handler_name || caseItem.creator_name || '未知',
             status_text: caseItem.status === '已完成' ? '已完成' : '未完成'
         }));
@@ -755,10 +812,39 @@ router.get('/:id', authenticateToken, async (req, res) => {
         // 转换数据格式，确保符合前端预期
         const formattedCase = {
             ...caseItem,
-            case_date: caseItem.case_date ? caseItem.case_date.toISOString().split('T')[0] : null,
-            created_at: caseItem.created_at ? caseItem.created_at.toISOString().split('T')[0] : null,
-            updated_at: caseItem.updated_at ? caseItem.updated_at.toISOString().split('T')[0] : null,
-            completed_at: caseItem.completed_at ? caseItem.completed_at.toISOString().split('T')[0] : null,
+            // 确保日期格式正确，使用本地时间而非UTC时间
+            case_date: caseItem.case_date ? 
+                (typeof caseItem.case_date === 'string' ? caseItem.case_date : 
+                caseItem.case_date.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-')) : null,
+            created_at: caseItem.created_at ? 
+                (typeof caseItem.created_at === 'string' ? caseItem.created_at : 
+                caseItem.created_at.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-')) : null,
+            updated_at: caseItem.updated_at ? 
+                (typeof caseItem.updated_at === 'string' ? caseItem.updated_at : 
+                caseItem.updated_at.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-')) : null,
+            completed_at: caseItem.completed_at ? 
+                (typeof caseItem.completed_at === 'string' ? caseItem.completed_at : 
+                caseItem.completed_at.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-')) : null,
             handler_name: caseItem.handler_name || caseItem.creator_name || '未知',
             status_text: caseItem.status === '已完成' ? '已完成' : '未完成'
         };

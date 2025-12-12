@@ -217,15 +217,36 @@ import { useRouter } from 'vue-router'
 // 日期格式化函数
 const formatDate = (date) => {
   if (!date) return '-'
+  // 检查是否已经是YYYY-MM-DD格式的字符串
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+  if (dateRegex.test(date)) {
+    // 已经是正确格式，直接返回
+    return date
+  }
+  // 如果是ISO字符串或其他格式，使用本地日期格式化
   const d = new Date(date)
-  return d.toLocaleDateString('zh-CN')
+  // 确保日期有效
+  if (isNaN(d.getTime())) {
+    return '-'
+  }
+  // 使用toLocaleDateString并指定时区，避免时区转换问题
+  return d.toLocaleDateString('zh-CN', {
+    timeZone: 'Asia/Shanghai'
+  })
 }
 
 // 日期时间格式化函数
 const formatDateTime = (date) => {
   if (!date) return '-'
   const d = new Date(date)
-  return d.toLocaleString('zh-CN')
+  // 确保日期有效
+  if (isNaN(d.getTime())) {
+    return '-'
+  }
+  // 使用toLocaleString并指定时区，避免时区转换问题
+  return d.toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai'
+  })
 }
 
 const router = useRouter()

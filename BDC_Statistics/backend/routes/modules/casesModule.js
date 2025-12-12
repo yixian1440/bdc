@@ -149,27 +149,43 @@ export async function createCase(db, caseData) {
             caseDate = new Date().toISOString().slice(0, 10); // 使用当前日期作为默认值，格式：YYYY-MM-DD
             console.warn(`[${operationId}] 案件日期为空，使用当前日期作为默认值: ${caseDate}`);
         } else {
-            // 处理前端发送的Date对象，确保日期格式正确，不受时区影响
+            // 处理前端发送的Date对象或日期字符串，确保日期格式正确
             if (typeof caseDate === 'string') {
-                // 如果是字符串，尝试解析为Date对象，然后转换为YYYY-MM-DD格式
-                try {
-                    const dateObj = new Date(caseDate);
-                    if (!isNaN(dateObj.getTime())) {
-                        // 使用Date.UTC()确保时区一致，避免日期减少一天
-                        const utcDate = new Date(Date.UTC(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()));
-                        caseDate = utcDate.toISOString().slice(0, 10);
-                        console.log(`[${operationId}] 日期字符串处理后: ${caseDate}`);
+                // 如果已经是YYYY-MM-DD格式，直接使用，不进行时区转换
+                // 检查字符串是否为YYYY-MM-DD格式
+                const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+                if (dateRegex.test(caseDate)) {
+                    // 已经是正确格式，直接使用
+                    console.log(`[${operationId}] 使用前端提供的YYYY-MM-DD格式日期: ${caseDate}`);
+                } else {
+                    // 如果不是标准格式，尝试解析并转换
+                    try {
+                        const dateObj = new Date(caseDate);
+                        if (!isNaN(dateObj.getTime())) {
+                            // 使用本地时间获取YYYY-MM-DD格式，避免时区转换问题
+                            caseDate = dateObj.toLocaleDateString('zh-CN', {
+                                year: 'numeric',
+                                month: '2-digit',
+                                day: '2-digit',
+                                timeZone: 'Asia/Shanghai'
+                            }).replace(/\//g, '-');
+                            console.log(`[${operationId}] 日期字符串处理后: ${caseDate}`);
+                        }
+                    } catch (error) {
+                        console.error(`[${operationId}] 日期字符串解析失败:`, error);
+                        // 如果解析失败，使用当前日期作为默认值
+                        caseDate = new Date().toISOString().slice(0, 10);
+                        console.warn(`[${operationId}] 日期解析失败，使用当前日期作为默认值: ${caseDate}`);
                     }
-                } catch (error) {
-                    console.error(`[${operationId}] 日期字符串解析失败:`, error);
-                    // 如果解析失败，使用当前日期作为默认值
-                    caseDate = new Date().toISOString().slice(0, 10);
-                    console.warn(`[${operationId}] 日期解析失败，使用当前日期作为默认值: ${caseDate}`);
                 }
             } else if (caseDate instanceof Date) {
-                // 如果是Date对象，转换为YYYY-MM-DD格式，使用UTC时间避免时区问题
-                const utcDate = new Date(Date.UTC(caseDate.getFullYear(), caseDate.getMonth(), caseDate.getDate()));
-                caseDate = utcDate.toISOString().slice(0, 10);
+                // 如果是Date对象，转换为YYYY-MM-DD格式，使用上海时区
+                caseDate = caseDate.toLocaleDateString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    timeZone: 'Asia/Shanghai'
+                }).replace(/\//g, '-');
                 console.log(`[${operationId}] Date对象处理后: ${caseDate}`);
             }
         }
