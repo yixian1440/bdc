@@ -38,8 +38,8 @@ class AllocationService {
             // 查询匹配角色的用户
             // 使用固定占位符避免JSON数组问题
             const query = roles.length === 1 
-                ? `SELECT id, real_name, role FROM users WHERE role = ? ORDER BY id`
-                : `SELECT id, real_name, role FROM users WHERE role IN (?, ?) ORDER BY id`;
+                ? `SELECT id, real_name, role FROM users WHERE role = ? AND status = '正常' ORDER BY id`
+                : `SELECT id, real_name, role FROM users WHERE role IN (?, ?) AND status = '正常' ORDER BY id`;
             
             const [users] = await db.execute(query, roles);
             

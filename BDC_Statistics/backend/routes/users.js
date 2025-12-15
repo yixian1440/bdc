@@ -92,7 +92,7 @@ router.get('/', authenticateToken, verifyAdmin, async (req, res) => {
         
         // 简化的查询，确保SQL语句正确
         const [users] = await db.execute(
-            'SELECT id, username, real_name, role FROM users'
+            'SELECT id, username, real_name, role, status FROM users'
         );
         
         console.log('查询成功，返回用户数:', users.length);
@@ -120,7 +120,7 @@ router.get('/', authenticateToken, verifyAdmin, async (req, res) => {
 // 添加新用户
 router.post('/', authenticateToken, verifyAdmin, async (req, res) => {
     try {
-        const { username, password, real_name, role, expertise_level } = req.body;
+        const { username, password, real_name, role, expertise_level, status } = req.body;
         
         if (!username || !password || !real_name || !role) {
             return res.status(400).json({ error: '必填字段不能为空' });
@@ -143,8 +143,8 @@ router.post('/', authenticateToken, verifyAdmin, async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const [result] = await db.execute(
-            'INSERT INTO users (username, password, real_name, role, expertise_level) VALUES (?, ?, ?, ?, ?)',
-            [username, hashedPassword, real_name, role, expertise_level || 1]
+            'INSERT INTO users (username, password, real_name, role, expertise_level, status) VALUES (?, ?, ?, ?, ?, ?)',
+            [username, hashedPassword, real_name, role, expertise_level || 1, status || '正常']
         );
 
         res.status(201).json({
@@ -161,7 +161,7 @@ router.post('/', authenticateToken, verifyAdmin, async (req, res) => {
 router.put('/:id', authenticateToken, verifyAdmin, async (req, res) => {
     try {
         const { id } = req.params;
-        const { real_name, role, expertise_level } = req.body;
+        const { real_name, role, expertise_level, status } = req.body;
         
         if (!real_name || !role) {
             return res.status(400).json({ error: '必填字段不能为空' });
@@ -182,8 +182,8 @@ router.put('/:id', authenticateToken, verifyAdmin, async (req, res) => {
         }
 
         await db.execute(
-            'UPDATE users SET real_name = ?, role = ?, expertise_level = ? WHERE id = ?',
-            [real_name, role, expertise_level || 1, id]
+            'UPDATE users SET real_name = ?, role = ?, expertise_level = ?, status = ? WHERE id = ?',
+            [real_name, role, expertise_level || 1, status || '正常', id]
         );
 
         res.json({ message: '用户信息更新成功' });

@@ -53,6 +53,14 @@
                 <span v-else style="color: #999;">-</span>
               </template>
         </el-table-column>
+        <el-table-column prop="status" label="状态" width="100">
+          <template #default="scope">
+                <el-tag v-if="scope && scope.row" :type="getRoleType(scope.row.status)">
+                  {{ scope.row.status || '-' }}
+                </el-tag>
+                <span v-else style="color: #999;">-</span>
+              </template>
+        </el-table-column>
         <el-table-column prop="created_at" label="创建时间" width="180" />
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="scope">
@@ -123,6 +131,12 @@
             <el-option label="国资企业专窗" value="国资企业专窗" />
           </el-select>
         </el-form-item>
+        <el-form-item label="状态" prop="status">
+          <el-select v-model="userForm.status" placeholder="请选择状态">
+            <el-option label="正常" value="正常" />
+            <el-option label="休假" value="休假" />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
@@ -190,7 +204,8 @@ const userForm = reactive({
   name: '',
   password: '',
   confirmPassword: '',
-  role: '收件人'
+  role: '收件人',
+  status: '正常'
 })
 
 // 表单验证规则
@@ -221,6 +236,9 @@ const userRules = {
   ],
   role: [
     { required: true, message: '请选择角色', trigger: 'change' }
+  ],
+  status: [
+    { required: true, message: '请选择状态', trigger: 'change' }
   ]
 }
 
@@ -256,14 +274,22 @@ const dialogTitle = computed(() => {
 })
 
 // 方法
-const getRoleType = (role) => {
+const getRoleType = (value) => {
+  // 角色类型映射
   const roleTypes = {
     '收件人': 'primary',
     '开发商': 'success',
     '管理员': 'warning',
     '国资企业专窗': 'info'
   }
-  return roleTypes[role] || 'info'
+  
+  // 状态类型映射
+  const statusTypes = {
+    '正常': 'success',
+    '休假': 'warning'
+  }
+  
+  return statusTypes[value] || roleTypes[value] || 'info'
 }
 
 const loadUsers = async () => {
@@ -335,6 +361,7 @@ const editUser = (user) => {
   // 使用前端name或后端real_name
   userForm.name = user.name || user.real_name
   userForm.role = user.role
+  userForm.status = user.status
   dialogVisible.value = true
 }
 
@@ -373,7 +400,8 @@ const submitForm = async () => {
     const formData = {
       username: userForm.username,
       real_name: userForm.name,
-      role: userForm.role
+      role: userForm.role,
+      status: userForm.status
     }
     
     if (!isEditMode.value) {
