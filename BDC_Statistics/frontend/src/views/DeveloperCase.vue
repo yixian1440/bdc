@@ -315,9 +315,8 @@ const caseRules = {
   contactPhone: [
     {
       validator: (rule, value, callback) => {
-        // 开发商转移业务时，联系电话非必填
-        const isDeveloperTransfer = caseForm.caseType === '开发商转移';
-        if (!isDeveloperTransfer && !value) {
+        // 开发商转移业务时，联系电话必填
+        if (!value) {
           callback(new Error('请输入联系电话'));
         } else {
           callback();

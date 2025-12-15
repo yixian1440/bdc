@@ -52,10 +52,17 @@ const routes = [
       },
       
       // 用户管理
-      { 
+      {
         path: 'users', 
         component: Users, 
         name: 'users',
+        meta: { role: '管理员' } 
+      },
+      // 开发商管理
+      {
+        path: 'developer-management', 
+        component: () => import('./views/system/DeveloperManagement.vue'), 
+        name: 'developer-management',
         meta: { role: '管理员' } 
       },
       // 统计分析

@@ -1,144 +1,201 @@
 import express from 'express';
 import db from '../config/database.js';
+import jwt from 'jsonwebtoken';
 
 const router = express.Router();
 
+// 确保JWT密钥与auth.js中使用相同的值
+const JWT_SECRET = process.env.JWT_SECRET || 'bdc_statistics_secure_jwt_secret_key_2024';
+
+// 认证中间件
+const authenticateToken = (req, res, next) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1];
+        
+        if (!token) {
+            console.error('未提供认证令牌');
+            return res.status(401).json({ error: '需要认证', message: '未提供认证令牌' });
+        }
+
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET);
+            req.user = decoded;
+            console.log('认证成功，用户ID:', decoded.id, '角色:', decoded.role);
+            next();
+        } catch (error) {
+            console.error('无效的认证令牌:', error.message);
+            return res.status(403).json({ error: '无效的认证令牌', message: error.message });
+        }
+    } catch (error) {
+        console.error('认证中间件错误:', error.message);
+        return res.status(500).json({ error: '内部服务器错误', message: error.message });
+    }
+};
+
 // 验证是否为管理员的中间件
 const verifyAdmin = (req, res, next) => {
-    if (req.user.role !== '管理员') {
+    if (!req.user || req.user.role !== '管理员') {
         return res.status(403).json({ error: '只有管理员可以访问此功能' });
     }
     next();
 };
 
-// 获取所有开发商项目列表
+/**
+ * 获取开发商项目列表（兼容现有功能）
+ */
 router.get('/projects', async (req, res) => {
     try {
-        const [projects] = await db.execute(
-            'SELECT id, project_name, description, created_at FROM developer_projects ORDER BY project_name'
-        );
-        res.json({ projects });
-    } catch (error) {
-        console.error('获取项目列表错误:', error);
-        res.status(500).json({ error: '服务器内部错误' });
-    }
-});
-
-// 添加新的开发商项目
-router.post('/projects', verifyAdmin, async (req, res) => {
-    try {
-        const { project_name, description } = req.body;
+        // 查询所有唯一的开发商名称，用于表单选择
+        const query = `
+            SELECT DISTINCT developer as project_name 
+            FROM cases 
+            WHERE developer IS NOT NULL AND developer != ''
+            ORDER BY developer ASC
+        `;
         
-        if (!project_name) {
-            return res.status(400).json({ error: '项目名称不能为空' });
-        }
-
-        // 检查项目是否已存在
-        const [existingProjects] = await db.execute(
-            'SELECT id FROM developer_projects WHERE project_name = ?',
-            [project_name]
-        );
-
-        if (existingProjects.length > 0) {
-            return res.status(400).json({ error: '项目已存在' });
-        }
-
-        const [result] = await db.execute(
-            'INSERT INTO developer_projects (project_name, description) VALUES (?, ?)',
-            [project_name, description || '']
-        );
-
-        res.status(201).json({
-            message: '项目创建成功',
-            projectId: result.insertId
+        const [developers] = await db.execute(query);
+        
+        res.json({
+            projects: developers.map(dev => ({ id: dev.project_name, project_name: dev.project_name }))
         });
     } catch (error) {
-        console.error('创建项目错误:', error);
-        res.status(500).json({ error: '服务器内部错误' });
+        console.error('获取开发商项目列表失败:', error);
+        res.status(500).json({
+            error: '获取开发商项目列表失败'
+        });
     }
 });
 
-// 更新开发商项目
-router.put('/projects/:id', verifyAdmin, async (req, res) => {
+/**
+ * 获取开发商列表，用于展示联系簿（管理员功能）
+ */
+router.get('/', authenticateToken, verifyAdmin, async (req, res) => {
     try {
-        const { id } = req.params;
-        const { project_name, description } = req.body;
+        // 查询developers表，根据project_name去重，只显示一条记录
+        // 开发商名称使用project_name字段
+        // 使用GROUP BY和聚合函数确保每个project_name只显示一条记录
+        const query = `
+            SELECT 
+                project_name AS developer, 
+                project_name, 
+                MAX(contact_person) AS agent, 
+                MAX(contact_phone) AS contact_phone 
+            FROM developers 
+            GROUP BY project_name 
+            ORDER BY project_name ASC
+        `;
         
-        if (!project_name) {
-            return res.status(400).json({ error: '项目名称不能为空' });
-        }
-
-        // 检查项目是否存在
-        const [existingProjects] = await db.execute(
-            'SELECT id FROM developer_projects WHERE id = ?',
-            [id]
-        );
-
-        if (existingProjects.length === 0) {
-            return res.status(404).json({ error: '项目不存在' });
-        }
-
-        // 检查新名称是否与其他项目重复
-        const [duplicateProjects] = await db.execute(
-            'SELECT id FROM developer_projects WHERE project_name = ? AND id != ?',
-            [project_name, id]
-        );
-
-        if (duplicateProjects.length > 0) {
-            return res.status(400).json({ error: '项目名称已存在' });
-        }
-
-        await db.execute(
-            'UPDATE developer_projects SET project_name = ?, description = ? WHERE id = ?',
-            [project_name, description || '', id]
-        );
-
-        res.json({ message: '项目更新成功' });
+        const [developers] = await db.execute(query);
+        
+        res.json({
+            success: true,
+            data: developers
+        });
     } catch (error) {
-        console.error('更新项目错误:', error);
-        res.status(500).json({ error: '服务器内部错误' });
+        console.error('获取开发商列表失败:', error);
+        res.status(500).json({
+            success: false,
+            message: '获取开发商列表失败',
+            error: error.message
+        });
     }
 });
 
-// 删除开发商项目
-router.delete('/projects/:id', verifyAdmin, async (req, res) => {
+/**
+ * 同步开发商信息，从最近的开发商转移案件获取代理人和联系方式
+ */
+router.post('/sync', authenticateToken, verifyAdmin, async (req, res) => {
     try {
-        const { id } = req.params;
+        // 首先获取所有唯一的开发商名称
+        const [uniqueDevelopers] = await db.execute(`
+            SELECT DISTINCT developer 
+            FROM cases 
+            WHERE developer IS NOT NULL AND developer != ''
+        `);
         
-        const [result] = await db.execute(
-            'DELETE FROM developer_projects WHERE id = ?',
-            [id]
-        );
-
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ error: '项目不存在' });
-        }
-
-        res.json({ message: '项目删除成功' });
-    } catch (error) {
-        console.error('删除项目错误:', error);
-        res.status(500).json({ error: '服务器内部错误' });
-    }
-});
-
-// 获取项目详情
-router.get('/projects/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
+        // 统计同步结果
+        let totalDevelopers = uniqueDevelopers.length;
+        let syncedDevelopers = 0;
+        let failedDevelopers = 0;
+        let skippedDevelopers = 0;
         
-        const [projects] = await db.execute(
-            'SELECT id, project_name, description, created_at FROM developer_projects WHERE id = ?',
-            [id]
-        );
-
-        if (projects.length === 0) {
-            return res.status(404).json({ error: '项目不存在' });
+        // 遍历每个开发商，同步最新的代理人和联系方式
+        for (const dev of uniqueDevelopers) {
+            const developerName = dev.developer;
+            
+            try {
+                // 查询该开发商所有开发商转移案件，找到有代理人和联系方式的记录
+                const [latestCase] = await db.execute(`
+                    SELECT agent, contact_phone 
+                    FROM cases 
+                    WHERE developer = ? 
+                    AND case_type IN ('开发商转移', '开发商转移登记')
+                    AND (agent IS NOT NULL AND agent != '' OR contact_phone IS NOT NULL AND contact_phone != '')
+                    ORDER BY created_at DESC 
+                    LIMIT 1
+                `, [developerName]);
+                
+                if (latestCase.length > 0) {
+                    const { agent, contact_phone } = latestCase[0];
+                    
+                    // 1. 同步到所有该开发商的案件中
+                    const [updateCasesResult] = await db.execute(`
+                        UPDATE cases 
+                        SET agent = ?, contact_phone = ? 
+                        WHERE developer = ? 
+                        AND case_type IN ('开发商转移', '开发商转移登记')
+                    `, [agent, contact_phone, developerName]);
+                    
+                    // 2. 同步到developers表中（插入或更新）
+                    try {
+                        // 使用正确的字段名：name, project_name, contact_person, contact_phone
+                        await db.execute(`
+                            INSERT INTO developers (name, project_name, contact_person, contact_phone) 
+                            VALUES (?, ?, ?, ?) 
+                            ON DUPLICATE KEY UPDATE 
+                                contact_person = VALUES(contact_person), 
+                                contact_phone = VALUES(contact_phone),
+                                updated_at = CURRENT_TIMESTAMP
+                        `, [developerName, developerName, agent, contact_phone]);
+                    } catch (err) {
+                        console.error(`同步到developers表失败: ${developerName}`, err.message);
+                        // 继续执行，不影响cases表的同步
+                    }
+                    
+                    if (updateCasesResult.affectedRows > 0) {
+                        syncedDevelopers++;
+                        console.log(`成功同步开发商: ${developerName}，更新了 ${updateCasesResult.affectedRows} 条记录`);
+                    } else {
+                        skippedDevelopers++;
+                        console.log(`跳过开发商: ${developerName}，没有需要更新的记录`);
+                    }
+                } else {
+                    skippedDevelopers++;
+                    console.log(`跳过开发商: ${developerName}，没有找到有效的代理人和联系方式`);
+                }
+            } catch (err) {
+                failedDevelopers++;
+                console.error(`同步开发商 ${developerName} 失败:`, err);
+            }
         }
-
-        res.json({ project: projects[0] });
+        
+        res.json({
+            success: true,
+            message: '开发商信息同步完成',
+            stats: {
+                total: totalDevelopers,
+                synced: syncedDevelopers,
+                failed: failedDevelopers,
+                skipped: skippedDevelopers
+            }
+        });
     } catch (error) {
-        console.error('获取项目详情错误:', error);
-        res.status(500).json({ error: '服务器内部错误' });
+        console.error('同步开发商信息失败:', error);
+        res.status(500).json({
+            success: false,
+            message: '同步开发商信息失败',
+            error: error.message
+        });
     }
 });
 

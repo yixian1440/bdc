@@ -87,6 +87,7 @@
                 <span>管理功能</span>
               </template>
               <el-menu-item index="/users">用户管理</el-menu-item>
+              <el-menu-item index="/developer-management">开发商管理</el-menu-item>
             </el-sub-menu>
           </el-menu>
         </el-aside>

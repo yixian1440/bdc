@@ -132,4 +132,17 @@ export const messageAPI = {
   })
 };
 
+// 开发商管理相关API
+export const developerAPI = {
+  // 获取开发商列表
+  getDevelopers: wrapApiMethod(async (params) => {
+    return await api.get('/developers', { params });
+  }),
+  
+  // 同步开发商信息
+  syncDevelopers: wrapApiMethod(async () => {
+    return await api.post('/developers/sync');
+  })
+};
+
 export default api;
