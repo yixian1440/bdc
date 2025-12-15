@@ -344,8 +344,11 @@ const caseRules = {
 
 // 处理案件类型变更
 const handleCaseTypeChange = () => {
-  // 简化实现，不再实时获取分配结果
-}
+  // 当案件类型变更为开发商相关类型时，刷新开发商列表
+  if (isDeveloperCase.value) {
+    fetchDevelopers();
+  }
+};
 
 
 

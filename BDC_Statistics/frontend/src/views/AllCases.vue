@@ -8,6 +8,14 @@
     <!-- 搜索筛选区域 -->
     <div class="filter-section">
       <el-form :inline="true" :model="searchForm" class="demo-form-inline">
+        <el-form-item label="关键字">
+          <el-input
+            v-model="searchForm.keyword"
+            placeholder="收件编号、处理人、申请人"
+            clearable
+            style="width: 300px"
+          ></el-input>
+        </el-form-item>
         <el-form-item label="案件类型">
           <el-select v-model="searchForm.caseType" placeholder="请选择案件类型" clearable>
             <el-option label="一般件" value="一般件"></el-option>
@@ -74,9 +82,6 @@
               <el-form-item label="收件日期">
                 {{ formatDate(currentCase.case_date) }}
               </el-form-item>
-              <el-form-item label="描述">
-                {{ currentCase.case_description || '-' }}
-              </el-form-item>
             </el-col>
             <el-col :span="12">
               <el-form-item label="创建时间">
@@ -87,6 +92,9 @@
               </el-form-item>
             </el-col>
           </el-row>
+          <el-form-item label="描述">
+            {{ currentCase.case_description || '-' }}
+          </el-form-item>
           <el-form-item label="备注">
             {{ currentCase.remarks || '无' }}
           </el-form-item>
@@ -114,7 +122,8 @@ export default {
     return {
       casesData: [],
       searchForm: {
-        caseType: ''
+        caseType: '',
+        keyword: ''
       },
       dateRange: [],
       detailDialogVisible: false,
@@ -150,7 +159,8 @@ export default {
         const params = {
           page: page,
           limit: limit,
-          caseType: this.searchForm.caseType
+          caseType: this.searchForm.caseType,
+          keyword: this.searchForm.keyword
         };
         
         // 添加日期范围
@@ -413,7 +423,8 @@ export default {
     // 重置搜索
     resetSearch() {
       this.searchForm = {
-        caseType: ''
+        caseType: '',
+        keyword: ''
       };
       this.dateRange = [];
       this.pagination.page = 1;

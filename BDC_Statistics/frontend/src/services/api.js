@@ -94,6 +94,18 @@ export const userAPI = {
   // 获取用户列表
   getUsers: wrapApiMethod(async (params) => {
     return await api.get('/users', { params });
+  }),
+  // 添加用户
+  addUser: wrapApiMethod(async (userData) => {
+    return await api.post('/users', userData);
+  }),
+  // 更新用户
+  updateUser: wrapApiMethod(async (userId, userData) => {
+    return await api.put(`/users/${userId}`, userData);
+  }),
+  // 删除用户
+  deleteUser: wrapApiMethod(async (userId) => {
+    return await api.delete(`/users/${userId}`);
   })
 };
 

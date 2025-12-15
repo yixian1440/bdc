@@ -22,10 +22,15 @@
         </template>
       </el-table-column>
       <el-table-column prop="applicant" label="申请人" width="120" show-overflow-tooltip />
-      <el-table-column prop="developer" label="开发商" width="150" show-overflow-tooltip v-if="showDeveloperColumn" />
-      <el-table-column prop="case_description" label="案件描述" show-overflow-tooltip />
-      <el-table-column prop="receiver_name" label="处理人" width="100" v-if="!isDeveloperOnly && !isAdmin" />
+      <el-table-column prop="agent" label="代理人" width="120" show-overflow-tooltip />
+      <el-table-column prop="developer" label="开发商" width="150" show-overflow-tooltip>
+        <template #default="scope">
+          {{ ['开发商转移', '开发商转移登记'].includes(scope.row.case_type) ? (scope.row.developer || '-') : '' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="receiver" label="处理人" width="100" />
       <el-table-column prop="creator_name" label="创建人" width="100" v-if="isAdmin" />
+      <el-table-column prop="case_description" label="案件描述" show-overflow-tooltip />
       <el-table-column label="操作" width="80" fixed="right">
         <template #default="scope">
           <el-button text @click="$emit('view-detail', scope.row.id)">查看</el-button>

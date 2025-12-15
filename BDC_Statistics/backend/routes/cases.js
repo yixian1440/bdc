@@ -612,8 +612,8 @@ router.get('/all-cases', authenticateToken, async (req, res) => {
         // 记录收到的请求参数，详细调试分页问题
         console.log('\n=== /all-cases 请求收到 ===');
         console.log('原始请求参数:', req.query);
-        const { page = 1, limit = 10, pageSize = 10, caseType = '' } = req.query;
-        console.log('解析后的参数 - page:', page, 'limit:', limit, 'pageSize:', pageSize, 'caseType:', caseType);
+        const { page = 1, limit = 10, pageSize = 10, caseType = '', keyword = '' } = req.query;
+        console.log('解析后的参数 - page:', page, 'limit:', limit, 'pageSize:', pageSize, 'caseType:', caseType, 'keyword:', keyword);
         // 兼容不同的分页参数名
         const actualPage = parseInt(page);
         const actualPageSize = parseInt(pageSize) || parseInt(limit) || 10;
@@ -634,11 +634,51 @@ router.get('/all-cases', authenticateToken, async (req, res) => {
         
         const params = [];
         
+        // 添加过滤条件
+        let whereClause = '';
+        
+        // 解析日期范围参数
+        const { startDate = '', endDate = '' } = req.query;
+        
         // 添加caseType过滤条件
         if (caseType && caseType !== '') {
-            query += ' WHERE c.case_type = ?';
+            whereClause = ' WHERE c.case_type = ?';
             params.push(caseType);
         }
+        
+        // 添加日期范围过滤条件
+        if (startDate && endDate) {
+            if (whereClause === '') {
+                whereClause = ' WHERE';
+            } else {
+                whereClause += ' AND';
+            }
+            whereClause += ' c.case_date BETWEEN ? AND ?';
+            params.push(startDate, endDate);
+        }
+        
+        // 添加keyword模糊查询条件
+        if (keyword && keyword !== '') {
+            if (whereClause === '') {
+                whereClause = ' WHERE';
+            } else {
+                whereClause += ' AND';
+            }
+            
+            // 支持收件编号、处理人、申请人关键字模糊查询
+            whereClause += ` (
+                c.case_number LIKE ? OR 
+                c.receiver LIKE ? OR 
+                c.applicant LIKE ?
+            )`;
+            
+            // 添加3个相同的keyword参数，用于3个字段的模糊查询
+            const likeKeyword = `%${keyword}%`;
+            params.push(likeKeyword, likeKeyword, likeKeyword);
+        }
+        
+        // 将whereClause添加到主查询
+        query += whereClause;
         
         // 添加排序和分页
         query += ' ORDER BY c.created_at DESC LIMIT ? OFFSET ?';
@@ -647,13 +687,19 @@ router.get('/all-cases', authenticateToken, async (req, res) => {
         const [cases] = await db.execute(query, params);
         
         // 获取总记录数
-        let countQuery = 'SELECT COUNT(*) as total FROM cases';
-        const countParams = [];
+        let countQuery = `
+            SELECT COUNT(*) as total 
+            FROM cases AS c 
+            LEFT JOIN users AS u ON c.user_id = u.id 
+            LEFT JOIN users AS a ON c.receiver_id = a.id
+        `;
         
-        if (caseType && caseType !== '') {
-            countQuery += ' WHERE case_type = ?';
-            countParams.push(caseType);
-        }
+        // 添加相同的whereClause到计数查询
+        countQuery += whereClause;
+        
+        // 将params中除了分页参数外的其他参数添加到countParams
+        // 这里需要注意：params的最后两个参数是limit和offset，需要排除
+        const countParams = params.slice(0, params.length - 2);
         
         const [countResult] = await db.execute(countQuery, countParams);
         const total = countResult[0].total;

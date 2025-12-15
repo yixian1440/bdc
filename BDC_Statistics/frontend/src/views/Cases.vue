@@ -150,16 +150,16 @@
                 <el-form-item label="代理人">
                   {{ currentCase.agent || '-' }}
                 </el-form-item>
-              </el-col>
-              <el-col :span="12">
-                <el-form-item label="开发商" v-if="currentCase.developer">
-                  {{ currentCase.developer }}
+                <el-form-item label="处理人" v-if="!isDeveloperOnly">
+                  {{ currentCase.receiver_name || '-' }}
                 </el-form-item>
                 <el-form-item label="创建人" v-if="isAdmin">
                   {{ currentCase.creator_name || '-' }}
                 </el-form-item>
-                <el-form-item label="处理人" v-if="!isDeveloperOnly">
-                  {{ currentCase.receiver_name || '-' }}
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="开发商" v-if="currentCase.developer">
+                  {{ currentCase.developer }}
                 </el-form-item>
                 <el-form-item label="创建时间">
                   {{ formatDateTime(currentCase.created_at) }}
