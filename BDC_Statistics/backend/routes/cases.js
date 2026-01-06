@@ -542,7 +542,7 @@ export const getStatisticsHandler = async (req, res) => {
                     FROM cases c
                     JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
                     ${dateRangeFilter} ${dateFilter}
-                    AND u.role IN ('收件人', '国资企业专窗')
+                    AND u.role IN ('收件人', '国资企业专窗', '代理人')
                     GROUP BY month, u.real_name
                     ORDER BY month DESC, case_count DESC
                 `;
@@ -557,7 +557,7 @@ export const getStatisticsHandler = async (req, res) => {
                     JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
                     ${dateRangeFilter} ${dateFilter}
                     AND (c.user_id = ? OR c.receiver_id = ?)
-                    AND u.role IN ('收件人', '国资企业专窗')
+                    AND u.role IN ('收件人', '国资企业专窗', '代理人')
                     GROUP BY month, u.real_name
                     ORDER BY month DESC, case_count DESC
                 `;
