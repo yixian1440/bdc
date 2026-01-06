@@ -525,12 +525,17 @@ export const getStatisticsHandler = async (req, res) => {
         try {
             // 查询最近六个月的按月统计数据
             let monthlyQuery, monthlyParams;
-            let dateRangeFilter = '';
-            let rangeParams = [];
+            let whereClause = '';
+            let queryParams = [];
             
-            // 如果没有指定年份和月份，默认显示最近六个月
+            // 构建WHERE子句
             if (!year || !month) {
-                dateRangeFilter = 'WHERE DATE(case_date) >= DATE_SUB(NOW(), INTERVAL 6 MONTH)';
+                // 默认显示最近六个月
+                whereClause = 'WHERE DATE(case_date) >= DATE_SUB(NOW(), INTERVAL 6 MONTH)';
+            } else {
+                // 按指定年份和月份查询
+                whereClause = 'WHERE YEAR(case_date) = ? AND MONTH(case_date) = ?';
+                queryParams.push(year, month);
             }
             
             if (userRole === '管理员') {
@@ -542,11 +547,11 @@ export const getStatisticsHandler = async (req, res) => {
                     FROM cases c
                     LEFT JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
                     LEFT JOIN developers d ON c.developer = d.developer_name
-                    ${dateRangeFilter} ${dateFilter}
+                    ${whereClause}
                     GROUP BY month, COALESCE(u.real_name, c.agent, d.agent)
                     ORDER BY month DESC, case_count DESC
                 `;
-                monthlyParams = [...rangeParams, ...dateParams];
+                monthlyParams = [...queryParams];
             } else {
                 monthlyQuery = `
                     SELECT 
@@ -556,13 +561,16 @@ export const getStatisticsHandler = async (req, res) => {
                     FROM cases c
                     LEFT JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
                     LEFT JOIN developers d ON c.developer = d.developer_name
-                    ${dateRangeFilter} ${dateFilter}
+                    ${whereClause}
                     AND (c.user_id = ? OR c.receiver_id = ?)
                     GROUP BY month, COALESCE(u.real_name, c.agent, d.agent)
                     ORDER BY month DESC, case_count DESC
                 `;
-                monthlyParams = [...rangeParams, ...dateParams, userId, userId];
+                monthlyParams = [...queryParams, userId, userId];
             }
+            
+            console.log('按月统计查询:', monthlyQuery);
+            console.log('查询参数:', monthlyParams);
             
             const [monthlyStatsResult] = await db.execute(monthlyQuery, monthlyParams);
             
