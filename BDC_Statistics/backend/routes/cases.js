@@ -543,7 +543,6 @@ export const getStatisticsHandler = async (req, res) => {
                     LEFT JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
                     LEFT JOIN developers d ON c.developer = d.developer_name
                     ${dateRangeFilter} ${dateFilter}
-                    AND (u.role IN ('收件人', '国资企业专窗', '代理人') OR c.agent IS NOT NULL OR d.agent IS NOT NULL)
                     GROUP BY month, COALESCE(u.real_name, c.agent, d.agent)
                     ORDER BY month DESC, case_count DESC
                 `;
@@ -558,7 +557,7 @@ export const getStatisticsHandler = async (req, res) => {
                     LEFT JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
                     LEFT JOIN developers d ON c.developer = d.developer_name
                     ${dateRangeFilter} ${dateFilter}
-                    AND ((c.user_id = ? OR c.receiver_id = ?) OR c.agent IS NOT NULL OR d.agent IS NOT NULL)
+                    AND (c.user_id = ? OR c.receiver_id = ?)
                     GROUP BY month, COALESCE(u.real_name, c.agent, d.agent)
                     ORDER BY month DESC, case_count DESC
                 `;
@@ -573,6 +572,13 @@ export const getStatisticsHandler = async (req, res) => {
             // 处理查询结果
             monthlyStatsResult.forEach(item => {
                 const key = item.month;
+                const receiverName = item.receiver_name;
+                
+                // 过滤掉无效的receiver_name
+                if (!receiverName || receiverName.trim() === '') {
+                    return;
+                }
+                
                 if (!monthlyMap.has(key)) {
                     monthlyMap.set(key, {
                         month: key,
@@ -580,7 +586,7 @@ export const getStatisticsHandler = async (req, res) => {
                     });
                 }
                 monthlyMap.get(key).data.push({
-                    receiver_name: item.receiver_name,
+                    receiver_name: receiverName,
                     case_count: item.case_count
                 });
             });
