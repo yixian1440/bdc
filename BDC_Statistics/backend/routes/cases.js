@@ -542,13 +542,12 @@ export const getStatisticsHandler = async (req, res) => {
                 monthlyQuery = `
                     SELECT 
                         DATE_FORMAT(case_date, '%Y-%m') as month,
-                        COALESCE(u.real_name, c.agent, d.agent) as receiver_name,
+                        COALESCE(u.real_name, c.agent) as receiver_name,
                         COUNT(*) as case_count
                     FROM cases c
                     LEFT JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
-                    LEFT JOIN developers d ON c.developer = d.developer_name
                     ${whereClause}
-                    GROUP BY month, COALESCE(u.real_name, c.agent, d.agent)
+                    GROUP BY month, COALESCE(u.real_name, c.agent)
                     ORDER BY month DESC, case_count DESC
                 `;
                 monthlyParams = [...queryParams];
@@ -556,14 +555,13 @@ export const getStatisticsHandler = async (req, res) => {
                 monthlyQuery = `
                     SELECT 
                         DATE_FORMAT(case_date, '%Y-%m') as month,
-                        COALESCE(u.real_name, c.agent, d.agent) as receiver_name,
+                        COALESCE(u.real_name, c.agent) as receiver_name,
                         COUNT(*) as case_count
                     FROM cases c
                     LEFT JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
-                    LEFT JOIN developers d ON c.developer = d.developer_name
                     ${whereClause}
                     AND (c.user_id = ? OR c.receiver_id = ?)
-                    GROUP BY month, COALESCE(u.real_name, c.agent, d.agent)
+                    GROUP BY month, COALESCE(u.real_name, c.agent)
                     ORDER BY month DESC, case_count DESC
                 `;
                 monthlyParams = [...queryParams, userId, userId];
