@@ -48,6 +48,18 @@
               </el-select>
             </el-form-item>
           </el-col>
+          <el-col :span="8">
+            <el-form-item label="选择日期">
+              <el-date-picker 
+                v-model="timeFilterState.day" 
+                type="date" 
+                placeholder="选择日期"
+                format="YYYY-MM-DD"
+                value-format="YYYY-MM-DD"
+                @change="handleTimeFilterChange"
+              ></el-date-picker>
+            </el-form-item>
+          </el-col>
         </el-row>
       </div>
 
@@ -111,7 +123,30 @@
           </el-col>
         </el-row>
 
-
+        <!-- 按月统计收件数 -->
+        <el-row :gutter="20" class="tables-section">
+          <el-col :span="24">
+            <el-card class="table-card">
+              <div slot="header" class="card-header">
+                <span>按月统计收件数（最近六个月）</span>
+              </div>
+              <div v-for="monthItem in monthlyCaseStats || []" :key="monthItem.month" class="month-section">
+                <h4>{{ monthItem.month }}</h4>
+                <el-table :data="monthItem.data" style="width: 100%" size="small">
+                  <el-table-column prop="receiver_name" label="收件人" width="180"></el-table-column>
+                  <el-table-column prop="case_count" label="办件量" width="180"></el-table-column>
+                </el-table>
+                <div class="month-total" v-if="monthItem.data.length > 0">
+                  总计：{{ monthItem.data.reduce((sum, item) => sum + item.case_count, 0) }} 件
+                </div>
+                <hr v-if="monthlyCaseStats.indexOf(monthItem) < monthlyCaseStats.length - 1" class="month-divider">
+              </div>
+              <div v-if="(monthlyCaseStats || []).length === 0" class="no-data">
+                暂无数据
+              </div>
+            </el-card>
+          </el-col>
+        </el-row>
 
         <!-- 详细统计表格 -->
         <el-row :gutter="20" class="tables-section">
@@ -369,7 +404,8 @@ export default {
       timeFilterState,
       yearOptions,
       monthOptions,
-      receiverRanking
+      receiverRanking,
+      monthlyCaseStats
     } = useStatistics();
     
     const { defaultChartColors } = useChartConfig();
@@ -450,7 +486,8 @@ export default {
     canSeeAllData,
     canSeeReceiverData,
     canSeeDeveloperData,
-    receiverRanking
+    receiverRanking,
+    monthlyCaseStats
   };
   }
 };
@@ -510,7 +547,40 @@ export default {
 }
 
 .overview-label {
-  font-size: 14px;
-  color: #666;
-}
+        font-size: 14px;
+        color: #666;
+    }
+    
+    /* 按月统计样式 */
+    .month-section {
+        margin-bottom: 20px;
+        padding: 10px;
+        background-color: #fafafa;
+        border-radius: 4px;
+    }
+    
+    .month-section h4 {
+        margin: 0 0 10px 0;
+        color: #1890ff;
+        font-size: 16px;
+    }
+    
+    .month-total {
+        margin-top: 10px;
+        text-align: right;
+        font-weight: bold;
+        color: #333;
+    }
+    
+    .month-divider {
+        margin: 20px 0;
+        border: none;
+        border-top: 1px dashed #e0e0e0;
+    }
+    
+    .no-data {
+        text-align: center;
+        padding: 20px;
+        color: #999;
+    }
 </style>

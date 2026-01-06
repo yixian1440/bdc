@@ -64,7 +64,8 @@ export function useStatistics() {
    */
   const timeFilterState = reactive({
     year: '', // 默认不选择年份，显示所有数据
-    month: ''
+    month: '',
+    day: ''
   });
   
   /**
@@ -145,6 +146,16 @@ export function useStatistics() {
   });
   
   /**
+   * 安全获取按月统计数据
+   * @returns {Array} 规范化后的按月统计数据数组
+   */
+  const monthlyCaseStats = computed(() => {
+    return Array.isArray(statistics.value.monthly_case_stats) 
+      ? statistics.value.monthly_case_stats 
+      : [];
+  });
+  
+  /**
    * 验证统计数据格式
    * @param {*} data - 需要验证的数据对象
    * @returns {boolean} 数据格式是否有效
@@ -177,22 +188,23 @@ export function useStatistics() {
    */
   const getRequestParams = () => {
     // 参数验证和清理
-    let timeFilterValue = typeof timeFilter.value === 'string' ? timeFilter.value : 'month';
     let yearValue = timeFilterState.year;
     let monthValue = timeFilterState.month;
+    let dayValue = timeFilterState.day;
+    let timeFilterValue = 'all';
     
-    // 当没有主动选择筛选条件时，显示所有数据
-    // 1. 如果用户选择了年份，无论是否选择月份，都按照年份筛选
-    // 2. 否则，发送timeFilter=all，显示所有数据
-    
-    // 如果没有选择年份，显示所有数据
-    if (!yearValue) {
-      timeFilterValue = 'all';
-      yearValue = undefined;
-      monthValue = undefined;
-    } else if (timeFilterValue === 'month') {
-      // 用户选择了年份但没有选择月份，统计该年份所有数据
-      if (yearValue && !monthValue) {
+    // 根据实际选择的日期范围确定timeFilterValue
+    if (yearValue) {
+      if (monthValue) {
+        if (dayValue) {
+          // 用户选择了年份、月份和日期，按日统计
+          timeFilterValue = 'day';
+        } else {
+          // 用户选择了年份和月份，按月统计
+          timeFilterValue = 'month';
+        }
+      } else {
+        // 用户只选择了年份，按年统计
         timeFilterValue = 'year';
       }
     }
@@ -200,7 +212,8 @@ export function useStatistics() {
     const params = {
       timeFilter: timeFilterValue,
       year: yearValue,
-      month: monthValue
+      month: monthValue,
+      day: dayValue
     };
     
     // 移除undefined值
@@ -462,6 +475,7 @@ export function useStatistics() {
         receiver_types: receiverTypes,
         receiver_ranking: receiverRanking,
         developer_data: developerData,
+        monthly_case_stats: backendData.monthly_case_stats || [],
         assignedCount: backendData.assignedCount || backendData.assigned_count || 0,
         inProgressCount: backendData.inProgressCount || backendData.in_progress_count || 0
       };
@@ -499,20 +513,15 @@ export function useStatistics() {
       
       // 准备查询参数，支持更多筛选条件
       let queryParams;
-      if (userRole === '管理员' || userRole === 'admin') {
-        // 管理员角色不受时间筛选器影响，始终获取所有数据
-        queryParams = { timeFilter: 'all', ...params };
-      } else {
-        // 其他角色使用正常的时间筛选
-        queryParams = {
-          ...getRequestParams(),
-          startDate: params.startDate,
-          endDate: params.endDate,
-          caseType: params.caseType,
-          assignedTo: params.assignedTo,
-          ...params
-        };
-      }
+      // 所有角色都使用正常的时间筛选，包括管理员
+      queryParams = {
+        ...getRequestParams(),
+        startDate: params.startDate,
+        endDate: params.endDate,
+        caseType: params.caseType,
+        assignedTo: params.assignedTo,
+        ...params
+      };
       
       // 调用 API 获取统计数据
       const result = await fetchStatistics(queryParams);
@@ -679,6 +688,7 @@ export function useStatistics() {
       developer_data: ensureArray(rawData.developer_data).map(item => normalizeDeveloperItem(item)),
       
       // 保留原始数据中的其他字段
+      monthly_case_stats: ensureArray(rawData.monthly_case_stats),
       ...rawData
     };
   
@@ -704,7 +714,8 @@ export function useStatistics() {
       statusDetailData: [],
       receiver_types: [],
       receiver_ranking: { '处理人': [], '收件人': [], '审核人': [] },
-      developer_data: []
+      developer_data: [],
+      monthly_case_stats: []
     };
   };
   
@@ -764,6 +775,20 @@ export function useStatistics() {
   };
   
   /**
+   * 更新日期选择
+   * @param {string} day - 日期值，格式为YYYY-MM-DD
+   */
+  const updateDay = (day) => {
+    if (typeof day === 'string' && day.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      timeFilterState.day = day;
+      // 自动加载新数据
+      loadStatistics();
+    } else {
+      console.warn(`无效的日期格式: ${day}`);
+    }
+  };
+  
+  /**
    * 更新角色选择
    * @param {string} role - 角色类型
    */
@@ -782,6 +807,7 @@ export function useStatistics() {
     timeFilter.value = 'month';
     timeFilterState.year = new Date().getFullYear();
     timeFilterState.month = new Date().getMonth() + 1;
+    timeFilterState.day = '';
     activeRole.value = '收件人';
     error.value = null;
   };
@@ -868,6 +894,7 @@ export function useStatistics() {
     receiverTypes,
     receiverRanking,
     developerData,
+    monthlyCaseStats,
     
     // 方法
     loadStatistics,
@@ -875,6 +902,7 @@ export function useStatistics() {
     updateTimeFilter,
     updateYear,
     updateMonth,
+    updateDay,
     updateActiveRole,
     resetFilters,
     handleError,
