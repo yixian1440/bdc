@@ -537,13 +537,14 @@ export const getStatisticsHandler = async (req, res) => {
                 monthlyQuery = `
                     SELECT 
                         DATE_FORMAT(case_date, '%Y-%m') as month,
-                        u.real_name as receiver_name,
+                        COALESCE(u.real_name, c.agent, d.agent) as receiver_name,
                         COUNT(*) as case_count
                     FROM cases c
-                    JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
+                    LEFT JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
+                    LEFT JOIN developers d ON c.developer = d.developer_name
                     ${dateRangeFilter} ${dateFilter}
-                    AND u.role IN ('收件人', '国资企业专窗', '代理人')
-                    GROUP BY month, u.real_name
+                    AND (u.role IN ('收件人', '国资企业专窗', '代理人') OR c.agent IS NOT NULL OR d.agent IS NOT NULL)
+                    GROUP BY month, COALESCE(u.real_name, c.agent, d.agent)
                     ORDER BY month DESC, case_count DESC
                 `;
                 monthlyParams = [...rangeParams, ...dateParams];
@@ -551,14 +552,14 @@ export const getStatisticsHandler = async (req, res) => {
                 monthlyQuery = `
                     SELECT 
                         DATE_FORMAT(case_date, '%Y-%m') as month,
-                        u.real_name as receiver_name,
+                        COALESCE(u.real_name, c.agent, d.agent) as receiver_name,
                         COUNT(*) as case_count
                     FROM cases c
-                    JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
+                    LEFT JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
+                    LEFT JOIN developers d ON c.developer = d.developer_name
                     ${dateRangeFilter} ${dateFilter}
-                    AND (c.user_id = ? OR c.receiver_id = ?)
-                    AND u.role IN ('收件人', '国资企业专窗', '代理人')
-                    GROUP BY month, u.real_name
+                    AND ((c.user_id = ? OR c.receiver_id = ?) OR c.agent IS NOT NULL OR d.agent IS NOT NULL)
+                    GROUP BY month, COALESCE(u.real_name, c.agent, d.agent)
                     ORDER BY month DESC, case_count DESC
                 `;
                 monthlyParams = [...rangeParams, ...dateParams, userId, userId];
