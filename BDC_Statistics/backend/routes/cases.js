@@ -573,6 +573,7 @@ export const getStatisticsHandler = async (req, res) => {
             console.log('查询参数:', monthlyParams);
             
             const [monthlyStatsResult] = await db.execute(monthlyQuery, monthlyParams);
+            console.log('按月统计查询结果:', monthlyStatsResult);
             
             // 格式化按月统计数据，按月份分组
             const monthlyMap = new Map();
@@ -605,6 +606,8 @@ export const getStatisticsHandler = async (req, res) => {
                 return b.month.localeCompare(a.month);
             });
             
+            console.log('格式化后的按月统计数据:', monthlyCaseStats);
+            
             // 如果数据不足六个月，补充空数据
             if (monthlyCaseStats.length < 6 && (!year || !month)) {
                 const currentDate = new Date();
@@ -628,8 +631,11 @@ export const getStatisticsHandler = async (req, res) => {
             }
         } catch (error) {
             console.error('获取按月统计数据失败:', error);
+            console.error('错误堆栈:', error.stack);
             monthlyCaseStats = [];
         }
+        
+        console.log('最终返回的按月统计数据:', monthlyCaseStats);
         
         // 返回成功响应 - 直接返回统计数据，不再嵌套data字段
         res.json({
