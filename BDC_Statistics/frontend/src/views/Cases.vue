@@ -48,7 +48,15 @@
           </el-form-item>
           
           <el-form-item label="申请人" required>
-            <el-input v-model="newCaseForm.applicant" placeholder="请输入申请人" />
+            <template v-if="newCaseForm.caseType === '银行抵押'">
+              <el-select v-model="newCaseForm.applicant" placeholder="请选择银行">
+                <el-option label="中国银行" value="中国银行" />
+                <el-option label="中国农商银行" value="中国农商银行" />
+                <el-option label="中国工商银行" value="中国工商银行" />
+                <el-option label="中国农业银行" value="中国农业银行" />
+              </el-select>
+            </template>
+            <el-input v-else v-model="newCaseForm.applicant" placeholder="请输入申请人" />
           </el-form-item>
           
           <el-form-item label="联系电话">

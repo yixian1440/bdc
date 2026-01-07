@@ -510,11 +510,49 @@ export const getStatisticsHandler = async (req, res) => {
         const [developerStatsResult] = await db.execute(developerQuery, developerParams);
         developerStatistics = developerStatsResult;
         
-        // 5. 获取本月收件总数
-        let monthlyTotalCases = totalCases;
+        // 5. 获取本月收件总数（只统计收件人和国资企业专窗角色）
+        let monthlyTotalCases = 0;
+        try {
+            let monthlyQuery, monthlyParams;
+            
+            // 构建本月的WHERE子句
+            const currentDate = new Date();
+            const currentYear = currentDate.getFullYear();
+            const currentMonth = currentDate.getMonth() + 1;
+            const whereClause = 'WHERE YEAR(case_date) = ? AND MONTH(case_date) = ?';
+            
+            if (userRole === '管理员') {
+                monthlyQuery = `
+                    SELECT COUNT(DISTINCT c.id) as case_count
+                    FROM cases c
+                    LEFT JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
+                    ${whereClause}
+                    AND (u.role IN ('收件人', '国资企业专窗') OR (u.role IS NULL AND c.agent IS NOT NULL))
+                `;
+                monthlyParams = [currentYear, currentMonth];
+            } else {
+                monthlyQuery = `
+                    SELECT COUNT(DISTINCT c.id) as case_count
+                    FROM cases c
+                    LEFT JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
+                    ${whereClause}
+                    AND ((c.user_id = ? OR c.receiver_id = ?) OR (u.role IS NULL AND c.agent IS NOT NULL))
+                    AND (u.role IN ('收件人', '国资企业专窗') OR (u.role IS NULL AND c.agent IS NOT NULL))
+                `;
+                monthlyParams = [currentYear, currentMonth, userId, userId];
+            }
+            
+            const [monthlyResult] = await db.execute(monthlyQuery, monthlyParams);
+            monthlyTotalCases = monthlyResult[0].case_count || 0;
+        } catch (error) {
+            console.error('获取本月收件总数失败:', error);
+            monthlyTotalCases = 0;
+        }
         
         console.log('统计数据查询结果:', { 
             totalCases, 
+            monthlyTotalCases, 
+            systemTotalCases, 
             typeStats: typeStats.length, 
             receiverStats: receiverStats.length, 
             developerStatistics: developerStatistics.length 
@@ -547,6 +585,7 @@ export const getStatisticsHandler = async (req, res) => {
                     FROM cases c
                     LEFT JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
                     ${whereClause}
+                    AND (u.role IN ('收件人', '国资企业专窗') OR (u.role IS NULL AND c.agent IS NOT NULL))
                     GROUP BY month, COALESCE(u.real_name, c.agent)
                     ORDER BY month DESC, case_count DESC
                 `;
@@ -560,7 +599,8 @@ export const getStatisticsHandler = async (req, res) => {
                     FROM cases c
                     LEFT JOIN users u ON (c.receiver_id = u.id OR c.user_id = u.id)
                     ${whereClause}
-                    AND (c.user_id = ? OR c.receiver_id = ?)
+                    AND ((c.user_id = ? OR c.receiver_id = ?) OR (u.role IS NULL AND c.agent IS NOT NULL))
+                    AND (u.role IN ('收件人', '国资企业专窗') OR (u.role IS NULL AND c.agent IS NOT NULL))
                     GROUP BY month, COALESCE(u.real_name, c.agent)
                     ORDER BY month DESC, case_count DESC
                 `;

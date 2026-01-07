@@ -94,7 +94,7 @@ class AdminStrategy extends RoleStrategy {
         // 管理员可以创建所有类型的案件
         return [
             '一般件', '自建房', '分割转让', '其他', 
-            '开发商转移', '开发商首次', '国资件', '企业件'
+            '开发商转移', '开发商首次', '国资件', '企业件', '银行抵押'
         ];
     }
     
@@ -129,7 +129,7 @@ class ReceiverStrategy extends RoleStrategy {
     
     getAvailableCaseTypes() {
         // 收件人可以创建一般案件类型
-        return ['一般件', '自建房', '分割转让', '其他'];
+        return ['一般件', '自建房', '分割转让', '其他', '银行抵押'];
     }
     
     hasCreatePermission() {
