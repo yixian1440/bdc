@@ -152,7 +152,7 @@ router.get('/my-cases', authenticateToken, async (req, res) => {
         const { page = 1, pageSize = 10, limit = 10, viewMode = 'all', sortBy = 'created_at', sortOrder = 'desc' } = req.query;
         // 确保分页参数为整数
         const actualPage = parseInt(page);
-        const actualPageSize = parseInt(pageSize) || parseInt(limit);
+        const actualPageSize = parseInt(limit) || parseInt(pageSize) || 10;
         const offset = (actualPage - 1) * actualPageSize;
         
         // 验证排序字段和排序顺序
@@ -758,7 +758,7 @@ router.get('/all-cases', authenticateToken, async (req, res) => {
         console.log('解析后的参数 - page:', page, 'limit:', limit, 'pageSize:', pageSize, 'caseType:', caseType, 'keyword:', keyword);
         // 兼容不同的分页参数名
         const actualPage = parseInt(page);
-        const actualPageSize = parseInt(pageSize) || parseInt(limit) || 10;
+        const actualPageSize = parseInt(limit) || parseInt(pageSize) || 10;
         const offset = (actualPage - 1) * actualPageSize;
         
         // 构建基本查询
