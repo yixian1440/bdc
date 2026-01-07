@@ -14,7 +14,7 @@
     <div v-else>
       <div class="page-header">
         <h2>系统管理员工作台</h2>
-        <p>总体数据概览与统计管理，{{ userInfo?.name || '' }}</p>
+        <p>{{ userInfo?.name || '' }}</p>
       </div>
 
       <!-- 统计卡片 -->
