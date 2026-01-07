@@ -97,6 +97,31 @@
         </el-col>
       </el-row>
 
+      <!-- 按月统计收件数 - 所有相关角色都能看到 -->
+      <el-row :gutter="20" class="tables-section" v-if="['管理员', '收件人', '国资企业专窗'].includes(userRole)">
+        <el-col :span="24">
+          <el-card class="table-card">
+            <div slot="header" class="card-header">
+              <span>按月统计收件数（最近六个月）</span>
+            </div>
+            <div v-for="monthItem in monthlyCaseStats || []" :key="monthItem.month" class="month-section">
+              <h4>{{ monthItem.month }}</h4>
+              <el-table :data="monthItem.data" style="width: 100%" size="small">
+                <el-table-column prop="receiver_name" label="收件人" width="180"></el-table-column>
+                <el-table-column prop="case_count" label="办件量" width="180"></el-table-column>
+              </el-table>
+              <div class="month-total" v-if="monthItem.data.length > 0">
+                总计：{{ monthItem.data.reduce((sum, item) => sum + item.case_count, 0) }} 件
+              </div>
+              <hr v-if="monthlyCaseStats.indexOf(monthItem) < monthlyCaseStats.length - 1" class="month-divider">
+            </div>
+            <div v-if="(monthlyCaseStats || []).length === 0" class="no-data">
+              暂无数据
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+
       <!-- 管理员统计视图 -->
       <template v-if="userRole === '管理员'">
         <!-- 统计图表区域 -->
@@ -127,31 +152,6 @@
                 :loading="isChartLoading"
                 :error="chartErrors.receiver"
               />
-            </el-card>
-          </el-col>
-        </el-row>
-
-        <!-- 按月统计收件数 -->
-        <el-row :gutter="20" class="tables-section">
-          <el-col :span="24">
-            <el-card class="table-card">
-              <div slot="header" class="card-header">
-                <span>按月统计收件数（最近六个月）</span>
-              </div>
-              <div v-for="monthItem in monthlyCaseStats || []" :key="monthItem.month" class="month-section">
-                <h4>{{ monthItem.month }}</h4>
-                <el-table :data="monthItem.data" style="width: 100%" size="small">
-                  <el-table-column prop="receiver_name" label="收件人" width="180"></el-table-column>
-                  <el-table-column prop="case_count" label="办件量" width="180"></el-table-column>
-                </el-table>
-                <div class="month-total" v-if="monthItem.data.length > 0">
-                  总计：{{ monthItem.data.reduce((sum, item) => sum + item.case_count, 0) }} 件
-                </div>
-                <hr v-if="monthlyCaseStats.indexOf(monthItem) < monthlyCaseStats.length - 1" class="month-divider">
-              </div>
-              <div v-if="(monthlyCaseStats || []).length === 0" class="no-data">
-                暂无数据
-              </div>
             </el-card>
           </el-col>
         </el-row>
