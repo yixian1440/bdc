@@ -6,54 +6,124 @@
 
 body {
   font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
-  background-color: #f5f7fa;
+  background-color: #f0f9ff;
+  color: #333;
 }
 
 #app {
   min-height: 100vh;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
 }
 
 .el-header {
-  background-color: #409EFF;
+  background: linear-gradient(135deg, #91d5ff 0%, #b37feb 100%);
   color: white;
   display: flex;
   align-items: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 0 32px;
+  height: 64px;
 }
 
 .el-header h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 600;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .el-main {
-  padding: 20px;
+  padding: 24px;
   max-width: 1400px;
   margin: 0 auto;
 }
 
 .el-card {
-  border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e6f7ff;
+  transition: all 0.3s ease;
+}
+
+.el-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+  border-color: #91d5ff;
 }
 
 .el-table {
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
+  border: 1px solid #e6f7ff;
+}
+
+.el-table th {
+  background-color: #f0f9ff !important;
+  color: #597ef7 !important;
+  font-weight: 600 !important;
+}
+
+.el-table tr:hover > td {
+  background-color: #f6ffed !important;
 }
 
 .el-pagination {
-  margin-top: 20px;
+  margin-top: 24px;
+  text-align: center;
+}
+
+.el-pagination button, .el-pagination .el-pager li {
+  border-radius: 6px;
+}
+
+.el-pagination .el-pager li.active {
+  background-color: #91d5ff;
+  color: white;
+}
+
+.el-button {
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.el-button--primary {
+  background-color: #1890ff;
+  border-color: #91d5ff;
+}
+
+.el-button--primary:hover {
+  background-color: #40a9ff;
+  border-color: #69c0ff;
+}
+
+.el-input {
+  border-radius: 8px;
+}
+
+.el-select {
+  border-radius: 8px;
+}
+
+.el-date-picker {
+  border-radius: 12px;
 }
 
 /* 响应式设计 */
 @media (max-width: 768px) {
   .el-main {
-    padding: 10px;
+    padding: 16px;
   }
   
   .el-col {
-    margin-bottom: 10px;
+    margin-bottom: 16px;
+  }
+  
+  .el-header {
+    padding: 0 16px;
+    height: 56px;
+  }
+  
+  .el-header h1 {
+    font-size: 18px;
   }
 }

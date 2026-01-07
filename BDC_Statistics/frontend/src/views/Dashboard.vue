@@ -113,34 +113,62 @@ export default {
 
 <style scoped>
 .dashboard-container {
-  padding: 20px;
+  padding: 24px;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
 }
 
 .login-required {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 500px;
+  min-height: 600px;
 }
 
 .login-required-content {
   text-align: center;
-  padding: 40px;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  padding: 48px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e6f7ff;
+  max-width: 480px;
+  width: 100%;
 }
 
 .login-icon {
-  font-size: 48px;
-  color: #409EFF;
-  margin-bottom: 20px;
+  font-size: 64px;
+  color: #91d5ff;
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.login-required-content h3 {
+  margin: 0 0 16px 0;
+  color: #597ef7;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.login-required-content p {
+  margin: 0 0 24px 0;
+  color: #91d5ff;
+  font-size: 16px;
 }
 
 .loading-content {
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 500px;
+  min-height: 600px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
 }
 </style>

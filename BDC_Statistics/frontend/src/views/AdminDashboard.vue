@@ -177,20 +177,8 @@ export default {
           // 获取总收件数
           const totalCases = statsResponse.system_total_cases || statsResponse.total_cases || 0
           
-          // 计算本月收件数
-          // 从最近六个月的按月统计数据中获取本月的数据
-          let monthlyCases = 0
-          if (Array.isArray(statsResponse.monthly_case_stats)) {
-            const now = new Date()
-            const currentMonthStr = now.toISOString().slice(0, 7) // 格式: YYYY-MM
-            
-            // 查找本月的统计数据
-            const currentMonthData = statsResponse.monthly_case_stats.find(item => item.month === currentMonthStr)
-            if (currentMonthData && Array.isArray(currentMonthData.data)) {
-              // 计算本月所有收件人的总办件量
-              monthlyCases = currentMonthData.data.reduce((sum, item) => sum + (item.case_count || 0), 0)
-            }
-          }
+          // 直接使用后端计算的本月收件数（已过滤角色）
+          const monthlyCases = statsResponse.monthly_total_cases || 0
           
           dashboardStats.value = {
             totalCases: totalCases,
@@ -292,59 +280,104 @@ export default {
 
 .login-required-content {
   text-align: center;
-  padding: 40px;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  padding: 48px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e6f7ff;
+  max-width: 480px;
+  width: 100%;
 }
 
 .login-icon {
-  font-size: 48px;
-  color: #409EFF;
-  margin-bottom: 20px;
+  font-size: 64px;
+  color: #91d5ff;
+  margin-bottom: 24px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.login-required-content h3 {
+  margin: 0 0 16px 0;
+  color: #597ef7;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.login-required-content p {
+  margin: 0 0 24px 0;
+  color: #91d5ff;
+  font-size: 16px;
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
+  padding: 24px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e6f7ff;
 }
 
 .page-header h2 {
   margin: 0 0 8px 0;
-  font-size: 24px;
-  color: #333;
+  font-size: 28px;
+  color: #597ef7;
+  font-weight: 600;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .page-header p {
   margin: 0;
-  color: #606266;
+  color: #91d5ff;
+  font-size: 16px;
 }
 
 .stats-cards {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
 .stat-card {
-  height: 120px;
+  height: 140px;
   display: flex;
   align-items: center;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e6f7ff;
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+  border-color: #91d5ff;
 }
 
 .stat-content {
   display: flex;
   align-items: center;
   width: 100%;
+  padding: 0 24px;
 }
 
 .stat-icon {
-  width: 60px;
-  height: 60px;
+  width: 72px;
+  height: 72px;
   border-radius: 50%;
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-right: 16px;
-  color: #fff;
-  font-size: 24px;
+  margin-right: 20px;
+  color: white;
+  font-size: 28px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .stat-info {
@@ -352,34 +385,57 @@ export default {
 }
 
 .stat-value {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: bold;
-  color: #303133;
-  margin-bottom: 4px;
+  color: #36cfc9;
+  margin-bottom: 8px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .stat-label {
-  color: #909399;
-  font-size: 14px;
+  color: #597ef7;
+  font-size: 16px;
+  font-weight: 500;
 }
 
 .admin-shortcuts {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e6f7ff;
+  background-color: #f0f9ff;
+  border-radius: 12px 12px 0 0;
+}
+
+.card-header span {
+  font-size: 16px;
+  font-weight: 600;
+  color: #597ef7;
 }
 
 .shortcut-btn {
   width: 100%;
-  height: 60px;
+  height: 64px;
   font-size: 16px;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #91d5ff 0%, #b37feb 100%);
+  border: none;
+  color: white;
+}
+
+.shortcut-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, #69c0ff 0%, #9254de 100%);
 }
 
 .recent-records {
-  margin-bottom: 24px;
+  margin-bottom: 32px;
 }
 </style>
