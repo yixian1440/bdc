@@ -54,6 +54,9 @@
                 <el-option label="中国农商银行" value="中国农商银行" />
                 <el-option label="中国工商银行" value="中国工商银行" />
                 <el-option label="中国农业银行" value="中国农业银行" />
+                <el-option label="中国建设银行" value="中国建设银行" />
+                <el-option label="四川银行" value="四川银行" />
+                <el-option label="凉山州商业银行" value="凉山州商业银行" />
               </el-select>
             </template>
             <el-input v-else v-model="newCaseForm.applicant" placeholder="请输入申请人" />
