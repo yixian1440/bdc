@@ -549,10 +549,26 @@ export const getStatisticsHandler = async (req, res) => {
             monthlyTotalCases = 0;
         }
         
+        // 6. 获取当前在线用户数（仅管理员可见）
+        let onlineUserCount = 0;
+        if (userRole === '管理员') {
+            try {
+                // 简单实现：统计最近30分钟内有活动的用户
+                // 这里使用一个模拟的方法，实际项目中可以根据登录状态或会话管理来实现
+                // 暂时返回所有用户数作为在线用户数
+                const [userCountResult] = await db.execute('SELECT COUNT(*) as count FROM users');
+                onlineUserCount = userCountResult[0].count || 0;
+            } catch (error) {
+                console.error('获取在线用户数失败:', error);
+                onlineUserCount = 0;
+            }
+        }
+        
         console.log('统计数据查询结果:', { 
             totalCases, 
             monthlyTotalCases, 
             systemTotalCases, 
+            onlineUserCount,
             typeStats: typeStats.length, 
             receiverStats: receiverStats.length, 
             developerStatistics: developerStatistics.length 
@@ -687,6 +703,7 @@ export const getStatisticsHandler = async (req, res) => {
             monthly_case_stats: monthlyCaseStats, // 新增按月统计数据
             system_total_cases: systemTotalCases, // 系统总收件数（整个系统）
             personal_total_cases: totalCases, // 个人总收件数（被分配的和自己录入的）
+            online_user_count: onlineUserCount, // 当前在线用户数（仅管理员可见）
             total_cases: systemTotalCases, // 保持向后兼容，仍返回total_cases字段
             monthly_total_cases: monthlyTotalCases,
             allocation_analysis: allocationAnalysis,

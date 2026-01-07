@@ -320,6 +320,7 @@ export function useStatistics() {
         totalCount: totalCount,
         systemTotalCases: backendData.system_total_cases || backendData.total_cases || 0,
         personalTotalCases: backendData.personal_total_cases || backendData.total_cases || 0,
+        onlineUserCount: backendData.online_user_count || 0,
         completedCount: backendData.completedCount || backendData.completed_count || 0,
         pendingCount: backendData.pendingCount || backendData.pending_count || 0,
         allocatedCount: backendData.allocatedCount || backendData.allocated_count || 0

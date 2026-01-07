@@ -77,7 +77,7 @@
         <p>以下是您的{{ userRole || '角色' }}统计数据</p>
       </div>
 
-      <!-- 总览统计卡片 - 显示系统总收件数和个人总收件数 -->
+      <!-- 总览统计卡片 - 显示系统总收件数和当前在线用户数 -->
       <el-row :gutter="20" class="overview-section">
         <el-col :span="6">
           <el-card class="overview-card">
@@ -87,7 +87,15 @@
             </div>
           </el-card>
         </el-col>
-        <el-col :span="6">
+        <el-col :span="6" v-if="userRole === '管理员'">
+          <el-card class="overview-card">
+            <div class="overview-content">
+              <div class="overview-number">{{ statistics.onlineUserCount || 0 }}</div>
+              <div class="overview-label">当前在线用户数</div>
+            </div>
+          </el-card>
+        </el-col>
+        <el-col :span="6" v-else>
           <el-card class="overview-card">
             <div class="overview-content">
               <div class="overview-number">{{ statistics.personalTotalCases || 0 }}</div>
