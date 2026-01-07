@@ -61,9 +61,12 @@
             </el-form-item>
           </el-col>
         </el-row>
-        <el-row :gutter="20" style="margin-top: 10px;">
+        <el-row :gutter="20" style="margin-top: 16px;">
           <el-col :span="24" style="text-align: right;">
-            <el-button type="info" @click="resetTimeFilter">重置筛选器</el-button>
+            <el-button type="primary" plain @click="resetTimeFilter" style="border-color: #91d5ff; color: #1890ff; background-color: #e6f7ff;">
+              <el-icon><Refresh /></el-icon>
+              重置筛选器
+            </el-button>
           </el-col>
         </el-row>
       </div>
@@ -350,6 +353,7 @@
 <script>
 import { ref, onMounted, onUnmounted, reactive, computed, watch } from 'vue';
 import { useStore } from 'vuex';
+import { Refresh } from '@element-plus/icons-vue';
 
 /**
  * 统计分析页面
@@ -379,7 +383,8 @@ export default {
   name: 'Statistics',
   components: {
       TypeChart,
-      ReceiverChart
+      ReceiverChart,
+      Refresh
     },
   setup() {
     /**
@@ -531,11 +536,12 @@ export default {
 }
 
 .filter-section {
-  margin-bottom: 20px;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  margin-bottom: 24px;
+  padding: 24px;
+  background-color: #f0f9ff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e6f7ff;
 }
 
 .charts-section {
@@ -554,88 +560,93 @@ export default {
 .table-card,
 .overview-card {
   height: 100%;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   transition: all 0.3s ease;
+  border: 1px solid #e6f7ff;
 }
 
 .chart-card:hover,
 .table-card:hover,
 .overview-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
+  border-color: #91d5ff;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid #f0f0f0;
-  background-color: #fafafa;
-  border-radius: 8px 8px 0 0;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e6f7ff;
+  background-color: #f0f9ff;
+  border-radius: 12px 12px 0 0;
 }
 
 .card-header span {
   font-size: 16px;
   font-weight: 600;
-  color: #333;
+  color: #597ef7;
 }
 
 .overview-content {
   text-align: center;
-  padding: 30px 0;
-  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-  border-radius: 8px;
+  padding: 32px 0;
+  background: linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%);
+  border-radius: 12px;
+  border: 1px solid #91d5ff;
 }
 
 .overview-number {
   font-size: 36px;
   font-weight: bold;
-  color: #1890ff;
+  color: #36cfc9;
   margin-bottom: 12px;
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .overview-label {
   font-size: 14px;
-  color: #666;
+  color: #597ef7;
   font-weight: 500;
 }
     
     /* 按月统计样式 */
     .month-section {
         margin-bottom: 24px;
-        padding: 20px;
-        background-color: #f8f9fa;
-        border-radius: 8px;
+        padding: 24px;
+        background-color: #f6ffed;
+        border-radius: 12px;
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
         transition: all 0.3s ease;
+        border: 1px solid #b7eb8f;
     }
     
     .month-section:hover {
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        transform: translateY(-2px);
     }
     
     .month-section h4 {
         margin: 0 0 16px 0;
-        color: #1890ff;
+        color: #52c41a;
         font-size: 18px;
         font-weight: 600;
         padding-bottom: 8px;
-        border-bottom: 2px solid #e6f7ff;
+        border-bottom: 2px solid #d9f7be;
     }
     
     .month-total {
         margin-top: 16px;
         text-align: right;
         font-weight: bold;
-        color: #333;
+        color: #389e0d;
         font-size: 16px;
-        padding: 10px;
-        background-color: #f0f9ff;
-        border-radius: 4px;
-        border-left: 4px solid #1890ff;
+        padding: 12px;
+        background-color: #f6ffed;
+        border-radius: 8px;
+        border-left: 4px solid #52c41a;
     }
     
     .month-divider {
@@ -655,22 +666,25 @@ export default {
     
     .welcome-section {
         margin-bottom: 30px;
-        padding: 24px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 32px;
+        background: linear-gradient(135deg, #91d5ff 0%, #b37feb 100%);
         color: white;
-        border-radius: 12px;
+        border-radius: 16px;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        text-align: center;
     }
     
     .welcome-section h2 {
-        margin: 0 0 8px 0;
-        font-size: 24px;
+        margin: 0 0 12px 0;
+        font-size: 28px;
         font-weight: 600;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05);
     }
     
     .welcome-section p {
         margin: 0;
-        font-size: 16px;
-        opacity: 0.9;
+        font-size: 18px;
+        opacity: 0.95;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05);
     }
 </style>
