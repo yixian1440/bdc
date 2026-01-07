@@ -551,17 +551,24 @@ export const getStatisticsHandler = async (req, res) => {
         
         // 6. 获取当前在线用户数（仅管理员可见）
         let onlineUserCount = 0;
+        console.log('当前用户角色:', userRole);
         if (userRole === '管理员') {
+            console.log('开始统计在线用户数...');
             try {
                 // 简单实现：统计最近30分钟内有活动的用户
                 // 这里使用一个模拟的方法，实际项目中可以根据登录状态或会话管理来实现
                 // 暂时返回所有用户数作为在线用户数
+                console.log('执行用户数查询...');
                 const [userCountResult] = await db.execute('SELECT COUNT(*) as count FROM users');
+                console.log('用户数查询结果:', userCountResult);
                 onlineUserCount = userCountResult[0].count || 0;
+                console.log('计算出的在线用户数:', onlineUserCount);
             } catch (error) {
                 console.error('获取在线用户数失败:', error);
                 onlineUserCount = 0;
             }
+        } else {
+            console.log('非管理员角色，跳过在线用户数统计');
         }
         
         console.log('统计数据查询结果:', { 
