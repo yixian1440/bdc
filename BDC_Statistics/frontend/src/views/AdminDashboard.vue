@@ -20,7 +20,7 @@
       <!-- 统计卡片 -->
       <div class="stats-cards">
         <el-row :gutter="20">
-          <el-col :span="8">
+          <el-col :span="12">
             <el-card class="stat-card">
               <div class="stat-content">
                 <div class="stat-icon" style="background: #409EFF;">
@@ -33,7 +33,7 @@
               </div>
             </el-card>
           </el-col>
-          <el-col :span="8">
+          <el-col :span="12">
             <el-card class="stat-card">
               <div class="stat-content">
                 <div class="stat-icon" style="background: #67C23A;">
@@ -42,19 +42,6 @@
                 <div class="stat-info">
                   <div class="stat-value">{{ dashboardStats.monthlyCases || 0 }}</div>
                   <div class="stat-label">本月收件（所有人总计）</div>
-                </div>
-              </div>
-            </el-card>
-          </el-col>
-          <el-col :span="8">
-            <el-card class="stat-card">
-              <div class="stat-content">
-                <div class="stat-icon" style="background: #E6A23C;">
-                  <el-icon><User /></el-icon>
-                </div>
-                <div class="stat-info">
-                  <div class="stat-value">{{ dashboardStats.activeUsers || 0 }}</div>
-                  <div class="stat-label">活跃用户数</div>
                 </div>
               </div>
             </el-card>
@@ -143,8 +130,7 @@ export default {
     const loading = ref(false)
     const dashboardStats = ref({
       totalCases: 0,
-      monthlyCases: 0,
-      activeUsers: 0
+      monthlyCases: 0
     })
     const recentCases = ref([])
 
@@ -183,39 +169,71 @@ export default {
     const loadDashboardStats = async () => {
       loading.value = true
       try {
-        // 获取所有案件，确保总收件数是数据库中的所有案件总数
-        const casesResponse = await caseAPI.getAllCases({ pageSize: 10000 })
-        // 兼容不同的数据结构
-        const cases = Array.isArray(casesResponse) 
-          ? casesResponse 
-          : Array.isArray(casesResponse.items) 
-            ? casesResponse.items 
-            : Array.isArray(casesResponse.cases) 
-              ? casesResponse.cases 
-              : []
+        // 使用统计API获取准确的统计数据
+        const statsResponse = await caseAPI.getStatistics()
         
-        // 计算总收件数 - 直接使用所有案件的长度，确保是数据库中的所有案件总数
-        const totalCases = cases.length
-        
-        // 计算本月收件数
-        const now = new Date()
-        const currentMonth = now.getMonth()
-        const currentYear = now.getFullYear()
-        
-        const monthlyCases = cases.filter(caseItem => {
-          const caseDate = new Date(caseItem.case_date)
-          return caseDate.getMonth() === currentMonth && caseDate.getFullYear() === currentYear
-        }).length
-        
-        dashboardStats.value = {
-          // 直接使用所有案件的长度作为总收件数，确保是数据库中的所有案件总数
-          totalCases: totalCases,
-          monthlyCases: monthlyCases,
-          activeUsers: 0 // 暂时无法从统计API获取活跃用户数
+        // 确保响应数据有效
+        if (statsResponse && statsResponse.success) {
+          // 获取总收件数
+          const totalCases = statsResponse.system_total_cases || statsResponse.total_cases || 0
+          
+          // 计算本月收件数
+          // 从最近六个月的按月统计数据中获取本月的数据
+          let monthlyCases = 0
+          if (Array.isArray(statsResponse.monthly_case_stats)) {
+            const now = new Date()
+            const currentMonthStr = now.toISOString().slice(0, 7) // 格式: YYYY-MM
+            
+            // 查找本月的统计数据
+            const currentMonthData = statsResponse.monthly_case_stats.find(item => item.month === currentMonthStr)
+            if (currentMonthData && Array.isArray(currentMonthData.data)) {
+              // 计算本月所有收件人的总办件量
+              monthlyCases = currentMonthData.data.reduce((sum, item) => sum + (item.case_count || 0), 0)
+            }
+          }
+          
+          dashboardStats.value = {
+            totalCases: totalCases,
+            monthlyCases: monthlyCases
+          }
+        } else {
+          // 如果统计API失败，回退到获取所有案件的方式
+          const casesResponse = await caseAPI.getAllCases({ pageSize: 10000 })
+          // 兼容不同的数据结构
+          const cases = Array.isArray(casesResponse) 
+            ? casesResponse 
+            : Array.isArray(casesResponse.items) 
+              ? casesResponse.items 
+              : Array.isArray(casesResponse.cases) 
+                ? casesResponse.cases 
+                : []
+          
+          // 计算总收件数
+          const totalCases = cases.length
+          
+          // 计算本月收件数
+          const now = new Date()
+          const currentMonth = now.getMonth()
+          const currentYear = now.getFullYear()
+          
+          const monthlyCases = cases.filter(caseItem => {
+            const caseDate = new Date(caseItem.case_date)
+            return caseDate.getMonth() === currentMonth && caseDate.getFullYear() === currentYear
+          }).length
+          
+          dashboardStats.value = {
+            totalCases: totalCases,
+            monthlyCases: monthlyCases
+          }
         }
       } catch (error) {
         console.error('加载统计数据失败:', error)
         store.commit('SET_ERROR', '加载统计数据失败，请重试')
+        // 错误时设置默认值
+        dashboardStats.value = {
+          totalCases: 0,
+          monthlyCases: 0
+        }
       } finally {
         loading.value = false
       }
