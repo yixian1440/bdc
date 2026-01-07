@@ -61,6 +61,11 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <el-row :gutter="20" style="margin-top: 10px;">
+          <el-col :span="24" style="text-align: right;">
+            <el-button type="info" @click="resetTimeFilter">重置筛选器</el-button>
+          </el-col>
+        </el-row>
       </div>
 
       <!-- 欢迎信息 -->
@@ -471,6 +476,24 @@ export default {
       await loadStatistics();
     };
 
+    /**
+     * 重置时间筛选器
+     * 将所有时间筛选条件重置为空，并重新加载统计数据
+     * @async
+     */
+    const resetTimeFilter = async () => {
+      // 确保组件仍挂载
+      if (!isMounted.value) return;
+      
+      // 重置所有时间筛选条件
+      timeFilterState.year = '';
+      timeFilterState.month = '';
+      timeFilterState.day = '';
+      
+      // 重新加载统计数据
+      await loadStatistics();
+    };
+
     return {
     statistics,
     isLoading,
@@ -478,6 +501,7 @@ export default {
     yearOptions,
     monthOptions,
     handleTimeFilterChange,
+    resetTimeFilter,
     isChartLoading,
     chartErrors,
     globalErrors,
@@ -508,6 +532,10 @@ export default {
 
 .filter-section {
   margin-bottom: 20px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .charts-section {
@@ -526,61 +554,123 @@ export default {
 .table-card,
 .overview-card {
   height: 100%;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.chart-card:hover,
+.table-card:hover,
+.overview-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  background-color: #fafafa;
+  border-radius: 8px 8px 0 0;
+}
+
+.card-header span {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
 }
 
 .overview-content {
   text-align: center;
-  padding: 20px 0;
+  padding: 30px 0;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  border-radius: 8px;
 }
 
 .overview-number {
-  font-size: 32px;
+  font-size: 36px;
   font-weight: bold;
   color: #1890ff;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .overview-label {
-        font-size: 14px;
-        color: #666;
-    }
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
     
     /* 按月统计样式 */
     .month-section {
-        margin-bottom: 20px;
-        padding: 10px;
-        background-color: #fafafa;
-        border-radius: 4px;
+        margin-bottom: 24px;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
+    }
+    
+    .month-section:hover {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     }
     
     .month-section h4 {
-        margin: 0 0 10px 0;
+        margin: 0 0 16px 0;
         color: #1890ff;
-        font-size: 16px;
+        font-size: 18px;
+        font-weight: 600;
+        padding-bottom: 8px;
+        border-bottom: 2px solid #e6f7ff;
     }
     
     .month-total {
-        margin-top: 10px;
+        margin-top: 16px;
         text-align: right;
         font-weight: bold;
         color: #333;
+        font-size: 16px;
+        padding: 10px;
+        background-color: #f0f9ff;
+        border-radius: 4px;
+        border-left: 4px solid #1890ff;
     }
     
     .month-divider {
-        margin: 20px 0;
+        margin: 24px 0;
         border: none;
         border-top: 1px dashed #e0e0e0;
     }
     
     .no-data {
         text-align: center;
-        padding: 20px;
+        padding: 40px;
         color: #999;
+        background-color: #fafafa;
+        border-radius: 8px;
+        margin: 20px 0;
+    }
+    
+    .welcome-section {
+        margin-bottom: 30px;
+        padding: 24px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+    }
+    
+    .welcome-section h2 {
+        margin: 0 0 8px 0;
+        font-size: 24px;
+        font-weight: 600;
+    }
+    
+    .welcome-section p {
+        margin: 0;
+        font-size: 16px;
+        opacity: 0.9;
     }
 </style>
