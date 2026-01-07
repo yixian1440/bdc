@@ -408,8 +408,8 @@ onMounted(() => {
 
 <style scoped>
 .messages-container {
-  padding: 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 24px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
   min-height: calc(100vh - 64px);
 }
 
@@ -419,30 +419,32 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
-  background: rgba(255, 255, 255, 0.95);
-  padding: 20px 30px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(10px);
+  background: white;
+  padding: 24px 32px;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e6f7ff;
 }
 
 .messages-title {
   display: flex;
   align-items: center;
-  gap: 12px;
-  font-size: 24px;
-  font-weight: 700;
-  color: #303133;
+  gap: 16px;
+  font-size: 28px;
+  font-weight: 600;
+  color: #597ef7;
   margin: 0;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .messages-title :deep(.el-icon) {
-  font-size: 28px;
-  color: #409eff;
+  font-size: 32px;
+  color: #91d5ff;
 }
 
 .unread-badge {
   transform: translate(10px, -10px);
+  background: #ff7875;
 }
 
 .mark-all-btn {
@@ -453,11 +455,15 @@ onMounted(() => {
   border-radius: 8px;
   font-weight: 600;
   transition: all 0.3s ease;
+  background: linear-gradient(135deg, #91d5ff 0%, #b37feb 100%);
+  border: none;
+  color: white;
 }
 
 .mark-all-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(145, 213, 255, 0.3);
+  background: linear-gradient(135deg, #69c0ff 0%, #9254de 100%);
 }
 
 .mark-all-btn:disabled {
@@ -465,16 +471,22 @@ onMounted(() => {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+  background: linear-gradient(135deg, #91d5ff 0%, #b37feb 100%);
 }
 
 /* 卡片样式 */
 .messages-card {
-  background: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(10px);
-  border: none;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e6f7ff;
   overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.messages-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
 }
 
 /* 过滤区域样式 */
@@ -482,8 +494,9 @@ onMounted(() => {
   display: flex;
   gap: 16px;
   padding: 24px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
-  border-bottom: 1px solid #e4e7ed;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+  border-bottom: 1px solid #e6f7ff;
+  border-radius: 16px 16px 0 0;
 }
 
 .filter-item {
@@ -526,21 +539,23 @@ onMounted(() => {
   flex: 1;
   max-height: calc(100vh - 350px);
   overflow-y: auto;
-  background: #fff;
+  background: #f6ffed;
   border-radius: 12px;
   padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #b7eb8f;
 }
 
 /* 消息详情容器 */
 .message-detail-container {
   flex: 1;
-  background: #fff;
+  background: #f6ffed;
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   max-height: calc(100vh - 350px);
   overflow-y: auto;
+  border: 1px solid #b7eb8f;
 }
 
 /* 详情头部 */
@@ -550,14 +565,15 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 2px solid #d9f7be;
 }
 
 .detail-title {
   font-size: 20px;
   font-weight: 700;
-  color: #303133;
+  color: #389e0d;
   margin: 0;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 /* 详情元信息 */
@@ -567,8 +583,9 @@ onMounted(() => {
   gap: 16px;
   margin-bottom: 24px;
   padding: 16px;
-  background: #f5f7fa;
+  background: #f0f9ff;
   border-radius: 8px;
+  border: 1px solid #e6f7ff;
 }
 
 .meta-item {
@@ -580,7 +597,7 @@ onMounted(() => {
 
 .meta-label {
   font-weight: 600;
-  color: #606266;
+  color: #597ef7;
 }
 
 /* 详情内容 */
@@ -588,12 +605,16 @@ onMounted(() => {
   margin-bottom: 24px;
   line-height: 1.8;
   color: #606266;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e6f7ff;
 }
 
 .detail-content h4 {
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: #597ef7;
   margin-bottom: 12px;
 }
 
@@ -603,20 +624,49 @@ onMounted(() => {
   gap: 12px;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 2px solid #f0f0f0;
+  border-top: 2px solid #d9f7be;
+}
+
+.detail-actions .el-button {
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.detail-actions .el-button--primary {
+  background: linear-gradient(135deg, #95de64 0%, #52c41a 100%);
+  border: none;
+  color: white;
+}
+
+.detail-actions .el-button--primary:hover {
+  background: linear-gradient(135deg, #73d13d 0%, #389e0d 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(82, 196, 26, 0.3);
+}
+
+.detail-actions .el-button {
+  background: white;
+  border: 1px solid #d9f7be;
+  color: #52c41a;
+}
+
+.detail-actions .el-button:hover {
+  background: #f6ffed;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(82, 196, 26, 0.2);
 }
 
 /* 活跃消息项 */
 .active-message {
-  background: #ecf5ff;
-  border-color: #409eff;
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.2);
+  background: #f0f9ff;
+  border-color: #91d5ff;
+  box-shadow: 0 4px 12px rgba(145, 213, 255, 0.2);
 }
 
 .active-message:hover {
-  background: #d9ecff;
-  border-color: #66b1ff;
-  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.3);
+  background: #e6f7ff;
+  border-color: #69c0ff;
+  box-shadow: 0 6px 20px rgba(145, 213, 255, 0.3);
 }
 
 /* 消息列表项 */
@@ -627,8 +677,8 @@ onMounted(() => {
 
 .message-item:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
-  border-color: #409eff;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  border-color: #91d5ff;
 }
 
 /* 响应式设计 - 小屏幕下堆叠显示 */
@@ -673,39 +723,39 @@ onMounted(() => {
 }
 
 .message-list-container::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+  background: #b7eb8f;
   border-radius: 3px;
 }
 
 .message-list-container::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: #95de64;
 }
 
 /* 消息项样式 */
 .message-item {
-  background: #fff;
-  border: 1px solid #e4e7ed;
+  background: white;
+  border: 1px solid #e6f7ff;
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 16px;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .message-item:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  border-color: #409eff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  border-color: #91d5ff;
 }
 
 .unread-message {
-  border-left: 4px solid #409eff;
+  border-left: 4px solid #91d5ff;
   background: #f0f9ff;
 }
 
 .unread-message:hover {
-  background: #ecf5ff;
+  background: #e6f7ff;
 }
 
 /* 消息项头部 */
@@ -734,11 +784,13 @@ onMounted(() => {
   font-weight: 700;
   padding: 2px 8px;
   border-radius: 10px;
+  background: #ff7875;
+  color: white;
 }
 
 .message-time {
   font-size: 12px;
-  color: #909399;
+  color: #91d5ff;
   font-weight: 500;
 }
 
@@ -750,13 +802,13 @@ onMounted(() => {
 .message-item-content .message-title {
   font-size: 16px;
   font-weight: 700;
-  color: #303133;
+  color: #597ef7;
   margin: 0 0 8px 0;
   transition: color 0.3s ease;
 }
 
 .unread-message .message-title {
-  color: #409eff;
+  color: #91d5ff;
 }
 
 .message-body {
@@ -768,6 +820,10 @@ onMounted(() => {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+  padding: 8px;
+  background: #fafafa;
+  border-radius: 6px;
+  border: 1px solid #f0f0f0;
 }
 
 /* 消息项底部 */
@@ -781,37 +837,57 @@ onMounted(() => {
   padding: 4px 12px;
   border-radius: 6px;
   transition: all 0.3s ease;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  color: #52c41a;
 }
 
 .mark-read-btn:hover {
-  background: rgba(64, 158, 255, 0.1);
-  color: #409eff;
+  background: #d9f7be;
+  color: #389e0d;
+  transform: translateY(-1px);
 }
 
 .mark-read-btn:disabled {
   color: #c0c4cc;
   cursor: not-allowed;
-  background: transparent;
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
 }
 
 /* 空状态样式 */
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  background: #fafafa;
+  background: #f6ffed;
   border-radius: 12px;
   margin-top: 20px;
+  border: 1px solid #b7eb8f;
 }
 
 .empty-icon {
   font-size: 80px;
-  color: #c0c4cc;
+  color: #95de64;
   margin-bottom: 16px;
 }
 
 .empty-state :deep(.el-empty__description) {
   font-size: 16px;
-  color: #909399;
+  color: #52c41a;
+}
+
+.empty-state :deep(.el-button) {
+  background: linear-gradient(135deg, #95de64 0%, #52c41a 100%);
+  border: none;
+  color: white;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.empty-state :deep(.el-button:hover) {
+  background: linear-gradient(135deg, #73d13d 0%, #389e0d 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(82, 196, 26, 0.3);
 }
 
 /* 加载状态样式 */
@@ -819,20 +895,37 @@ onMounted(() => {
   padding: 40px 20px;
 }
 
+.loading-state :deep(.el-skeleton__item) {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+  border-radius: 8px;
+}
+
 /* 分页样式 */
 .messages-pagination {
   padding: 20px 24px;
-  background: #fafafa;
-  border-top: 1px solid #e4e7ed;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e6f7ff 100%);
+  border-top: 1px solid #e6f7ff;
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  border-radius: 0 0 16px 16px;
 }
 
 .pagination {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+.pagination :deep(.el-pagination__button:hover) {
+  color: #91d5ff;
+  border-color: #91d5ff;
+}
+
+.pagination :deep(.el-pagination__button--active) {
+  background-color: #91d5ff;
+  border-color: #91d5ff;
+  color: white;
 }
 
 /* 响应式设计 */
