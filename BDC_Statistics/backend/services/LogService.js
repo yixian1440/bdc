@@ -23,10 +23,10 @@ class LogService {
         try {
             const {
                 userId = null,
-                username,
-                realName,
-                agentName,
-                action,
+                username = '',
+                realName = '',
+                agentName = '',
+                action = '',
                 description = '',
                 ipAddress = '',
                 userAgent = '',
@@ -36,11 +36,22 @@ class LogService {
             // 确定要显示的用户名：优先使用代理人姓名，然后是实际姓名，最后是账户名
             const displayName = agentName || realName || username;
 
+            // 确保所有参数都不是 undefined
+            const safeUserId = userId ?? null;
+            const safeUsername = username ?? '';
+            const safeRealName = realName ?? '';
+            const safeAgentName = agentName ?? '';
+            const safeAction = action ?? '';
+            const safeDescription = description ?? '';
+            const safeIpAddress = ipAddress ?? '';
+            const safeUserAgent = userAgent ?? '';
+            const safeLevel = level ?? 'info';
+
             const [result] = await db.execute(
                 `INSERT INTO system_logs 
                  (user_id, username, real_name, agent_name, action, description, ip_address, user_agent, level) 
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [userId, username, realName, agentName, action, description, ipAddress, userAgent, level]
+                [safeUserId, safeUsername, safeRealName, safeAgentName, safeAction, safeDescription, safeIpAddress, safeUserAgent, safeLevel]
             );
 
             return {
@@ -76,8 +87,8 @@ class LogService {
      */
     static async logLogin(loginData) {
         const {
-            username,
-            realName,
+            username = '',
+            realName = '',
             success,
             ipAddress = '',
             userAgent = '',

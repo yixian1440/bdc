@@ -201,6 +201,10 @@ export const monitoringAPI = {
   // 清理旧监控数据
   cleanOldMonitoringData: wrapApiMethod(async (params) => {
     return await api.delete('/admin/monitoring/clean', { params });
+  }),
+  // 获取用户活动数据
+  getUserActivityData: wrapApiMethod(async (params) => {
+    return await api.get('/admin/monitoring/user-activity', { params });
   })
 };
 

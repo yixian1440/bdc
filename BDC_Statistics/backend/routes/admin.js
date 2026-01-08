@@ -242,4 +242,28 @@ router.delete('/monitoring/clean', authenticateToken, verifyAdmin, async (req, r
     }
 });
 
+// 用户活动相关API
+router.get('/monitoring/user-activity', authenticateToken, verifyAdmin, async (req, res) => {
+    try {
+        const { startDate, endDate } = req.query;
+        
+        const userActivityData = await MonitoringService.getUserActivityData({
+            startDate,
+            endDate
+        });
+        
+        res.json({
+            success: true,
+            data: userActivityData
+        });
+    } catch (error) {
+        console.error('获取用户活动数据失败:', error);
+        res.status(500).json({
+            success: false,
+            message: '获取用户活动数据失败',
+            error: error.message
+        });
+    }
+});
+
 export default router;

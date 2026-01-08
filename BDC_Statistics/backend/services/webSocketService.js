@@ -383,6 +383,25 @@ class WebSocketService {
   }
 
   /**
+   * 发送用户活动数据更新
+   * @param {Object} userActivityData - 用户活动数据
+   */
+  sendUserActivityUpdate(userActivityData) {
+    const message = {
+      type: 'userActivityUpdate',
+      userActivityData,
+      timestamp: new Date().toISOString()
+    };
+    
+    // 广播到所有客户端
+    this.broadcastToAllClients(message);
+    
+    // 同时发送到特定频道
+    this.broadcastToChannel('monitoring', message);
+    this.broadcastToChannel('userActivity', message);
+  }
+
+  /**
    * 获取当前连接的客户端数量
    * @returns {number} 客户端数量
    */

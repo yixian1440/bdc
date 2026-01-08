@@ -41,6 +41,8 @@ async function createLogTables() {
                 id INT PRIMARY KEY AUTO_INCREMENT,
                 user_id INT,
                 username VARCHAR(50) NOT NULL,
+                real_name VARCHAR(100),
+                agent_name VARCHAR(100),
                 action VARCHAR(100) NOT NULL,
                 description TEXT,
                 ip_address VARCHAR(50),
@@ -53,6 +55,16 @@ async function createLogTables() {
                 INDEX idx_level (level)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         `);
+        
+        // 3. 如果表已存在，添加缺失的列
+        console.log('检查并添加缺失的列...');
+        try {
+            await db.execute("ALTER TABLE system_logs ADD COLUMN IF NOT EXISTS real_name VARCHAR(100);");
+            await db.execute("ALTER TABLE system_logs ADD COLUMN IF NOT EXISTS agent_name VARCHAR(100);");
+            console.log('列添加成功！');
+        } catch (error) {
+            console.log('列已存在或添加失败:', error.message);
+        }
         
         console.log('system_logs 表创建/更新成功！');
         

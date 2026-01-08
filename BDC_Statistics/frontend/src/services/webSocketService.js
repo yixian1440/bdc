@@ -123,6 +123,19 @@ class WebSocketService {
             channel: 'statistics'
         });
     }
+
+    // 订阅特定频道
+    subscribe(channel) {
+        this.send({
+            type: 'subscribe',
+            channel
+        });
+    }
+
+    // 断开连接
+    disconnect() {
+        this.close();
+    }
     
     // 发送用户身份信息
     sendUserIdentification() {
@@ -199,6 +212,17 @@ class WebSocketService {
                         callback(data);
                     } catch (error) {
                         console.error('执行chatMessage事件回调失败:', error);
+                    }
+                });
+            }
+        } else if (type === 'userActivityUpdate') {
+            if (this.eventCallbacks.has('userActivityUpdate')) {
+                const callbacks = this.eventCallbacks.get('userActivityUpdate');
+                callbacks.forEach(callback => {
+                    try {
+                        callback(data);
+                    } catch (error) {
+                        console.error('执行userActivityUpdate事件回调失败:', error);
                     }
                 });
             }
