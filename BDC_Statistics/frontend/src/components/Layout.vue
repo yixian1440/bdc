@@ -88,6 +88,8 @@
               </template>
               <el-menu-item index="/users">用户管理</el-menu-item>
               <el-menu-item index="/developer-management">开发商管理</el-menu-item>
+              <el-menu-item index="/system/logs">系统日志</el-menu-item>
+              <el-menu-item index="/system/monitoring">系统监控</el-menu-item>
             </el-sub-menu>
           </el-menu>
         </el-aside>

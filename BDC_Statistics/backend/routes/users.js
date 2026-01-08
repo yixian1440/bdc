@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import db from '../config/database.js';
 import { getUserCreatableCaseTypes } from '../middleware/casePermission.js';
 import NotificationService from '../services/notificationService.js';
+import webSocketService from '../services/webSocketService.js';
 
 const router = express.Router();
 // 确保JWT密钥与auth.js中使用相同的值
@@ -71,6 +72,27 @@ router.get('/unread-count', authenticateToken, async (req, res) => {
     }
 });
 
+// 获取在线用户列表
+router.get('/online', authenticateToken, async (req, res) => {
+    try {
+        const onlineUsers = webSocketService.getOnlineUsers();
+        
+        res.json({
+            success: true,
+            data: {
+                users: onlineUsers
+            }
+        });
+    } catch (error) {
+        console.error('获取在线用户列表失败:', error);
+        res.status(500).json({
+            success: false,
+            message: '获取在线用户列表失败',
+            error: error.message
+        });
+    }
+});
+
 // 验证是否为管理员的中间件
 const verifyAdmin = (req, res, next) => {
     if (!req.user) {
@@ -85,7 +107,37 @@ const verifyAdmin = (req, res, next) => {
     next();
 };
 
-// 获取所有用户列表
+// 获取所有用户列表（用于消息发送）
+router.get('/all', authenticateToken, async (req, res) => {
+    try {
+        console.log('用户列表API被调用，用户角色:', req.user?.role);
+        
+        // 简化的查询，确保SQL语句正确
+        const [users] = await db.execute(
+            'SELECT id, username, real_name, role, status FROM users'
+        );
+        
+        console.log('查询成功，返回用户数:', users.length);
+        res.json({
+            success: true,
+            data: {
+                users: users
+            }
+        });
+    } catch (error) {
+        // 输出错误信息到控制台
+        console.error('获取用户列表错误:', error);
+        
+        // 返回错误信息给前端
+        res.status(500).json({
+            success: false,
+            message: '获取用户列表失败',
+            error: error.message
+        });
+    }
+});
+
+// 获取所有用户列表（管理员）
 router.get('/', authenticateToken, verifyAdmin, async (req, res) => {
     try {
         console.log('用户列表API被调用，用户角色:', req.user?.role);

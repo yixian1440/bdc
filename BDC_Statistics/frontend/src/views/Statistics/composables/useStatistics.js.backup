@@ -1,0 +1,910 @@
+/**
+ * 统计数据管理组合式函数
+ * 
+ * @module useStatistics
+ * @description 提供统计页面所需的状态管理、数据获取、处理和筛选功能
+ * 使用响应式状态管理统计数据，包含错误处理、数据验证和边界条件检查
+ */
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue';
+import { ElMessage, ElNotification } from 'element-plus';
+import { caseAPI } from '@/services/api';
+import webSocketService from '@/services/webSocketService';
+import store from '@/store';
+
+/**
+ * 统计数据管理的组合式函数
+ * 处理统计数据的获取、筛选和状态管理
+ * 
+ * @returns {Object} 统计数据管理对象，包含状态、计算属性和方法
+ */
+export function useStatistics() {
+  // 组件挂载状态标志
+  const isMounted = ref(false);
+  
+  /**
+   * 统计数据对象 - 包含所有统计相关的数据
+   * @type {Ref<Object>} 响应式引用，提供默认结构避免空对象问题
+   */
+  const statistics = ref({
+      totalCount: 0,
+      systemTotalCases: 0,
+      personalTotalCases: 0,
+      completedCount: 0,
+      pendingCount: 0,
+      allocatedCount: 0,
+      typeData: [],
+      receiverData: [],
+      typeDetailData: [],
+      receiverDetailData: []
+    });
+  /**
+   * 加载状态标志
+   * @type {Ref<boolean>} 响应式引用，控制加载指示器显示
+   */
+  const loading = ref(false);
+  /**
+   * 错误信息对象
+   * @type {Ref<Error|null>} 响应式引用，存储错误状态
+   */
+  const error = ref(null);
+  /**
+   * 计算属性 - 加载状态
+   * @returns {boolean} 当前是否处于加载状态
+   */
+  const isLoading = computed(() => loading.value);
+  
+  /**
+   * 时间筛选器类型
+   * @type {Ref<string>} 响应式引用，值为'day'|'week'|'month'|'year'
+   */
+  const timeFilter = ref('month');
+  
+  /**
+   * 时间筛选器状态 - 暴露给外部组件使用
+   */
+  const timeFilterState = reactive({
+    year: '', // 默认不选择年份，显示所有数据
+    month: '',
+    day: ''
+  });
+  
+  /**
+   * 当前激活的角色类型
+   * @type {Ref<string>} 响应式引用，值为'收件人'|'抄送'|'抄送人'
+   */
+  const activeRole = ref('收件人');
+  
+  /**
+   * 可选年份列表（最近5年）
+   * @returns {Array<number>} 降序排列的年份数组
+   */
+  const yearOptions = computed(() => {
+    const currentYear = new Date().getFullYear();
+    return Array.from({ length: 5 }, (_, i) => ({
+      value: currentYear - 4 + i,
+      label: `${currentYear - 4 + i}年`
+    }));
+  });
+  
+  /**
+   * 月份选项列表
+   * @returns {Array<Object>} 包含标签和值的月份选项数组
+   */
+  const monthOptions = computed(() => {
+    return [
+      { value: '', label: '全部月份' },
+      ...Array.from({ length: 12 }, (_, i) => ({
+        label: `${i + 1}月`,
+        value: i + 1
+      }))
+    ];
+  });
+  
+  /**
+   * 角色标签列表
+   * @type {Array<string>} 包含所有可用角色类型的数组
+   * 根据需求，移除了"审核人"角色，因为所有案件录入后直接完成
+   */
+  const roleLabels = ['处理人', '收件人'];
+  
+  /**
+   * 安全获取收件人类别数据
+   * @returns {Array} 收件人类别数据数组，确保返回数组类型
+   */
+  const receiverTypes = computed(() => {
+    return Array.isArray(statistics.value.receiver_types) 
+      ? statistics.value.receiver_types 
+      : [];
+  });
+  
+  /**
+   * 安全获取收件人排名数据
+   * @returns {Object} 按角色分组的收件人排名数据，已规范化数据结构
+   */
+  const receiverRanking = computed(() => {
+    const ranking = statistics.value.receiver_ranking || {};
+    
+    // 规范化不同角色的数据结构
+    return roleLabels.reduce((acc, role) => {
+      acc[role] = Array.isArray(ranking[role]) 
+        ? ranking[role].map(item => normalizeRankingItem(item))
+        : [];
+      return acc;
+    }, {});
+  });
+  
+
+  
+  /**
+   * 安全获取开发商分布数据
+   * @returns {Array} 规范化后的开发商分布数据数组
+   */
+  const developerData = computed(() => {
+    return Array.isArray(statistics.value.developer_data) 
+      ? statistics.value.developer_data.map(item => normalizeDeveloperItem(item)) 
+      : [];
+  });
+  
+  /**
+   * 安全获取按月统计数据
+   * @returns {Array} 规范化后的按月统计数据数组
+   */
+  const monthlyCaseStats = computed(() => {
+    return Array.isArray(statistics.value.monthly_case_stats) 
+      ? statistics.value.monthly_case_stats 
+      : [];
+  });
+  
+  /**
+   * 验证统计数据格式
+   * @param {*} data - 需要验证的数据对象
+   * @returns {boolean} 数据格式是否有效
+   */
+  const validateStatisticsData = (data) => {
+    if (!data || typeof data !== 'object') {
+      return false;
+    }
+    
+    // 检查必要字段
+    const requiredFields = [
+      'totalCount'
+    ];
+    
+    for (const field of requiredFields) {
+      if (!(field in data)) {
+        console.warn(`缺少必要字段: ${field}`);
+        return false;
+      }
+    }
+    
+    return true;
+  };
+  
+
+  
+  /**
+   * 准备请求参数
+   * @returns {Object} 规范化和验证后的API请求参数
+   */
+  const getRequestParams = () => {
+    // 参数验证和清理
+    let yearValue = timeFilterState.year;
+    let monthValue = timeFilterState.month;
+    let dayValue = timeFilterState.day;
+    let timeFilterValue = 'all';
+    
+    // 根据实际选择的日期范围确定timeFilterValue
+    if (yearValue) {
+      if (monthValue) {
+        if (dayValue) {
+          // 用户选择了年份、月份和日期，按日统计
+          timeFilterValue = 'day';
+        } else {
+          // 用户选择了年份和月份，按月统计
+          timeFilterValue = 'month';
+        }
+      } else {
+        // 用户只选择了年份，按年统计
+        timeFilterValue = 'year';
+      }
+    }
+    
+    const params = {
+      timeFilter: timeFilterValue,
+      year: yearValue,
+      month: monthValue,
+      day: dayValue
+    };
+    
+    // 移除undefined值
+    Object.keys(params).forEach(key => {
+      if (params[key] === undefined || params[key] === '') {
+        delete params[key];
+      }
+    });
+    
+    return params;
+  };
+  
+  /**
+   * 规范化排名数据项
+   * @param {*} item - 需要规范化的排名数据项
+   * @returns {Object} 规范化后的排名数据项
+   */
+  const normalizeRankingItem = (item) => {
+    if (!item || typeof item !== 'object') {
+      return {};
+    }
+    
+    return {
+      receiver: String(item.receiver || item.assigned_to || ''),
+      total_count: Number(item.total_count || 0),
+      avg_processing_hours: Number(item.avg_processing_hours || 0),
+      percentage: String(item.percentage || '0%')
+    };
+  };
+  
+  /**
+   * 规范化趋势数据项
+   * @param {*} item - 需要规范化的趋势数据项
+   * @returns {Object} 规范化后的趋势数据项
+   */
+  const normalizeTrendItem = (item) => {
+    if (!item || typeof item !== 'object') {
+      return {};
+    }
+    
+    return {
+      date: String(item.date || item.label || ''),
+      total: Number(item.total || item.value || item.count || 0),
+      month: String(item.month || ''),
+      day: String(item.day || '')
+    };
+  };
+  
+  /**
+   * 规范化开发商数据项
+   * @param {*} item - 需要规范化的开发商数据项
+   * @returns {Object} 规范化后的开发商数据项
+   */
+  const normalizeDeveloperItem = (item) => {
+    if (!item || typeof item !== 'object') {
+      return {};
+    }
+    
+    return {
+      developerName: String(item.developer || item.developer_name || item.applicant || ''),
+      count: Number(item.count || 0),
+      percentage: String(item.percentage || '0%')
+    };
+  };
+  
+  /**
+   * 获取统计数据
+   * @async
+   * @param {Object} [params={}] - 额外的请求参数
+   * @returns {Object} 规范化后的统计数据
+   */
+  const fetchStatistics = async (params = {}) => {
+    try {
+      // 确保组件仍挂载
+      if (!isMounted.value) return getDefaultStatisticsData();
+      
+      // 参数合并和验证 - 使用统一的请求参数，后端负责权限控制
+      const requestParams = { ...getRequestParams(), ...params };
+      
+      // 验证API是否存在
+      if (!caseAPI || typeof caseAPI.getStatistics !== 'function') {
+        throw new Error('API服务不可用');
+      }
+      
+      const response = await caseAPI.getStatistics(requestParams);
+      
+      // 确保组件仍挂载
+      if (!isMounted.value) return getDefaultStatisticsData();
+      
+      // 详细的响应数据验证
+      if (!response) {
+        throw new Error('服务器返回空响应');
+      }
+      
+      // 处理成功响应 - 直接使用response，不嵌套data字段
+      const backendData = response;
+      
+      // 直接使用后端返回的统计数据，确保每个角色只能看到自己权限范围内的统计数据
+      // 使用新的字段名，确保系统总收件数和个人总收件数正确
+      let totalCount = backendData.system_total_cases || backendData.total_cases || 0;
+      
+      // 基础统计数据
+      const baseStatisticsData = {
+        totalCount: totalCount,
+        systemTotalCases: backendData.system_total_cases || backendData.total_cases || 0,
+        personalTotalCases: backendData.personal_total_cases || backendData.total_cases || 0,
+        completedCount: backendData.completedCount || backendData.completed_count || 0,
+        pendingCount: backendData.pendingCount || backendData.pending_count || 0,
+        allocatedCount: backendData.allocatedCount || backendData.allocated_count || 0
+      };
+      
+      // 根据角色处理不同的数据
+      let typeData = [];
+      let receiverData = [];
+      let typeDetailData = [];
+      let receiverDetailData = [];
+      let statusDetailData = [];
+      let developerData = [];
+      let receiverRanking = { '处理人': [], '收件人': [] };
+      let receiverTypes = [];
+      
+      // 处理案件类型数据 - 优先使用type_statistics字段，兼容typeStats
+      const typeStatsData = Array.isArray(backendData.type_statistics) ? backendData.type_statistics : 
+                            Array.isArray(backendData.typeStats) ? backendData.typeStats : [];
+      
+      if (typeStatsData.length > 0) {
+        // 案件类型类别映射 - 确保所有案件类型正确分类
+        const categoryMapping = {
+          '一般类': '一般件',
+          '国资类': '国资',
+          '企业类': '企业',
+          '开发商类': '开发商',
+          '开发商转移': '开发商转移',
+          '开发商首次': '开发商首次',
+          '国资件': '国资件',
+          '企业件': '企业件',
+          '自建房': '自建房',
+          '分割转让': '分割转让',
+          '其他': '其他'
+        };
+        
+        typeData = typeStatsData.map(typeStat => {
+          const caseType = typeStat.case_type || typeStat.type_name || typeStat.name || '';
+          // 映射到标准案件类型类别
+          const mappedType = categoryMapping[caseType] || caseType || '未知类型';
+          // 替换可能导致显示问题的特殊字符
+          const sanitizedType = mappedType.replace(/[\x00-\x1F\x7F]/g, '');
+          return {
+            name: sanitizedType || '未知类型',
+            value: typeStat.total_count || 0,
+            percentage: totalCount > 0 ? Math.round(((typeStat.total_count || 0) / totalCount) * 100) : 0
+          };
+        });
+        
+        typeDetailData = typeStatsData.map(typeStat => {
+          const caseType = typeStat.case_type || typeStat.type_name || typeStat.name || '';
+          // 映射到标准案件类型类别
+          const mappedType = categoryMapping[caseType] || caseType || '未知类型';
+          // 替换可能导致显示问题的特殊字符
+          const sanitizedType = mappedType.replace(/[\x00-\x1F\x7F]/g, '');
+          return {
+            typeName: sanitizedType || '未知类型',
+            count: typeStat.total_count || 0,
+            percentage: totalCount > 0 ? `${Math.round(((typeStat.total_count || 0) / totalCount) * 100)}%` : '0%'
+          };
+        });
+      }
+      
+      // 处理收件人数据 - 优先使用receiver_statistics字段，兼容receiverStats
+      const receiverStatsData = Array.isArray(backendData.receiver_statistics) ? backendData.receiver_statistics : 
+                                Array.isArray(backendData.receiverStats) ? backendData.receiverStats : [];
+      
+      if (receiverStatsData.length > 0) {
+        receiverData = receiverStatsData.map(receiverStat => ({
+          name: receiverStat.receiver || receiverStat.real_name || receiverStat.name || '未知处理人',
+          value: receiverStat.total_count || 0,
+          percentage: totalCount > 0 ? Math.round(((receiverStat.total_count || 0) / totalCount) * 100) : 0
+        }));
+        
+        receiverDetailData = receiverStatsData.map(receiverStat => ({
+          receiverName: receiverStat.receiver || receiverStat.real_name || receiverStat.name || '未知处理人',
+          count: receiverStat.total_count || 0,
+          percentage: totalCount > 0 ? `${Math.round(((receiverStat.total_count || 0) / totalCount) * 100)}%` : '0%'
+        }));
+      }
+      
+      // 处理开发商数据 - 优化逻辑，使用更清晰的字段处理
+      if (Array.isArray(backendData.developer_statistics)) {
+        developerData = backendData.developer_statistics.map(developerItem => ({
+          developerName: developerItem.developer || developerItem.developer_name || developerItem.applicant || '未知开发商',
+          count: developerItem.total_count || developerItem.count || 0,
+          percentage: totalCount > 0 ? `${Math.round(((developerItem.total_count || developerItem.count || 0) / totalCount) * 100)}%` : '0%'
+        }));
+      } else if (Array.isArray(backendData.developer_data)) {
+        // 兼容旧格式
+        developerData = backendData.developer_data.map(developerItem => ({
+          developerName: developerItem.developer || developerItem.developer_name || developerItem.applicant || '未知开发商',
+          count: developerItem.count || developerItem.total_count || 0,
+          percentage: totalCount > 0 ? `${Math.round(((developerItem.count || developerItem.total_count || 0) / totalCount) * 100)}%` : '0%'
+        }));
+      }
+      
+      // 处理状态详情数据 - 直接使用后端返回的数据，后端已处理权限过滤
+      if (Array.isArray(backendData.statusDetailData)) {
+        statusDetailData = backendData.statusDetailData.map(statusItem => ({
+          statusName: statusItem.status || statusItem.name || '未知状态',
+          count: statusItem.count || 0,
+          percentage: totalCount > 0 ? `${Math.round(((statusItem.count || 0) / totalCount) * 100)}%` : '0%'
+        }));
+      }
+      
+      // 处理案件来源数据 - 新增功能
+      let sourceData = [];
+      if (Array.isArray(backendData.caseSourceStatistics)) {
+        sourceData = backendData.caseSourceStatistics.map(sourceItem => ({
+          name: sourceItem.source_channel || sourceItem.name || '未知来源',
+          value: sourceItem.count || 0,
+          percentage: totalCount > 0 ? Math.round(((sourceItem.count || 0) / totalCount) * 100) : 0
+        }));
+      }
+      
+      // 处理收件人排名数据 - 移除"审核人"角色，只保留"处理人"和"收件人"
+      if (backendData.receiver_ranking && typeof backendData.receiver_ranking === 'object') {
+        receiverRanking = {
+          '处理人': Array.isArray(backendData.receiver_ranking['处理人']) ? backendData.receiver_ranking['处理人'].map(item => normalizeRankingItem(item)) : [],
+          '收件人': Array.isArray(backendData.receiver_ranking['收件人']) ? backendData.receiver_ranking['收件人'].map(item => normalizeRankingItem(item)) : []
+        };
+        
+        // 从receiver_ranking构建receiverData，用于图表展示
+        if (Array.isArray(receiverRanking['收件人']) && receiverRanking['收件人'].length > 0) {
+          receiverData = receiverRanking['收件人'].map(item => ({
+            name: item.receiver || '未知处理人',
+            value: item.total_count || 0,
+            percentage: totalCount > 0 ? Math.round(((item.total_count || 0) / totalCount) * 100) : 0
+          }));
+          
+          receiverDetailData = receiverRanking['收件人'].map(item => ({
+            receiverName: item.receiver || '未知处理人',
+            count: item.total_count || 0,
+            percentage: totalCount > 0 ? `${Math.round(((item.total_count || 0) / totalCount) * 100)}%` : '0%'
+          }));
+        }
+      }
+      
+      // 处理收件人类别数据
+      if (Array.isArray(backendData.receiver_types)) {
+        receiverTypes = backendData.receiver_types;
+      }
+      
+      // 合并所有数据，确保包含所有必要字段
+      const statisticsData = {
+        ...baseStatisticsData,
+        typeData,
+        receiverData,
+        sourceData,
+        typeDetailData,
+        receiverDetailData,
+        statusDetailData,
+        receiver_types: receiverTypes,
+        receiver_ranking: receiverRanking,
+        developer_data: developerData,
+        assignedCount: backendData.assignedCount || backendData.assigned_count || 0,
+        inProgressCount: backendData.inProgressCount || backendData.in_progress_count || 0
+      };
+      
+      return statisticsData;
+    } catch (err) {
+      // 确保组件仍挂载
+      if (!isMounted.value) return getDefaultStatisticsData();
+      
+      // 错误处理
+      console.error('获取统计数据错误:', err);
+      
+      // 返回默认数据以避免界面崩溃
+      return getDefaultStatisticsData();
+    }
+  };
+  
+  /**
+   * 加载统计数据
+   * @async
+   * @param {Object} params - 查询参数，包含日期范围等
+   * @returns {Object} 加载后的统计数据
+   */
+  const loadStatistics = async (params = {}) => {
+    // 确保组件仍挂载
+    if (!isMounted.value) return getDefaultStatisticsData();
+    
+    // 重置状态
+    loading.value = true;
+    error.value = null;
+    
+    try {
+      // 获取当前用户角色
+      const userRole = localStorage.getItem('userRole') || store.getters?.userRole || '';
+      
+      // 准备查询参数，支持更多筛选条件
+      let queryParams;
+      // 所有角色都使用正常的时间筛选，包括管理员
+      queryParams = {
+        ...getRequestParams(),
+        startDate: params.startDate,
+        endDate: params.endDate,
+        caseType: params.caseType,
+        assignedTo: params.assignedTo,
+        ...params
+      };
+      
+      // 调用 API 获取统计数据
+      const result = await fetchStatistics(queryParams);
+      
+      // 确保组件仍挂载
+      if (!isMounted.value) return getDefaultStatisticsData();
+      
+      // 更新状态
+      statistics.value = result;
+      
+      // 处理边界情况 - 确保数据不为空
+      if (statistics.value.totalCount === 0) {
+        // 管理员角色不显示时间范围提示，因为管理员应该总是能看到数据
+        if (userRole !== '管理员' && userRole !== 'admin') {
+          ElMessage.warning('当前时间范围内没有统计数据');
+        }
+      } else {
+        // 成功通知
+        ElNotification({
+          title: '成功',
+          message: '统计数据加载成功',
+          type: 'success',
+          duration: 2000
+        });
+      }
+      
+      // 为统计表格准备数据
+      prepareStatisticsTables();
+      
+      return result;
+    } catch (err) {
+      // 确保组件仍挂载
+      if (!isMounted.value) return getDefaultStatisticsData();
+      
+      console.error('加载统计数据失败:', err);
+      error.value = err.message || '加载失败';
+      
+      // 显示错误通知
+      ElNotification({
+        title: '数据获取失败',
+        message: err.message || '未知错误',
+        type: 'error',
+        duration: 3000
+      });
+      
+      // 设置默认数据
+      statistics.value = getDefaultStatisticsData();
+      
+      return statistics.value;
+    } finally {
+      // 确保组件仍挂载
+      if (isMounted.value) {
+        loading.value = false;
+      }
+    }
+  };
+  
+  /**
+   * 准备统计表格数据
+   */
+  const prepareStatisticsTables = () => {
+    // 确保组件仍挂载
+    if (!isMounted.value) return;
+    
+    // 确保处理人详情数据存在
+    if (!statistics.value.receiverDetailData || statistics.value.receiverDetailData.length === 0) {
+      // 如果没有现成的详细数据，则从receiverData生成
+      statistics.value.receiverDetailData = statistics.value.receiverData.map(item => ({
+        receiverName: item.name,
+        count: item.value,
+        percentage: `${item.percentage || 0}%`
+      }));
+    }
+  };
+  
+  /**
+   * 标准化统计数据，确保数据结构一致性和安全性
+   * @param {*} rawData - 原始统计数据
+   * @returns {Object} 规范化后的统计数据
+   */
+  const normalizeStatisticsData = (rawData) => {
+    if (!rawData || typeof rawData !== 'object') {
+      console.error('无效的原始数据');
+      return getDefaultStatisticsData();
+    }
+    
+    // 创建包含默认值的规范化对象
+    const normalized = {
+      // 基本统计数据
+      totalCount: Number(rawData.total_count || rawData.totalCount || 0),
+
+      
+      // 案件类型数据 - 更新为新的类型系统
+      typeData: ensureArray(rawData.type_statistics || rawData.typeData).map(item => {
+        const caseType = String(item.case_type || item.typeName || item.name || '');
+        // 映射到新的案件类型
+        // 案件类型映射 - 支持新的企业类类别
+        const newTypeMapping = {
+          '一般件': '一般件',
+          '开发商': '开发商',
+          '国资': '国资',
+          '多人分割转让': '多人分割转让',
+          '其他复杂件': '其他复杂件',
+          '自建房': '自建房',
+          '分割转让': '分割转让',
+          '其他': '其他',
+          '开发商首次': '开发商首次',
+          '开发商转移': '开发商转移',
+          '国资件': '国资件',
+          '企业件': '企业件',
+          '企业类': '企业',
+          '开发商类': '开发商',
+          '一般类': '一般件',
+          '国资类': '国资'
+        };
+        // 确保案件类型名称不为空且能正确显示
+        const typeName = newTypeMapping[caseType] || caseType || '未知类型';
+        // 替换可能导致显示问题的特殊字符
+        const sanitizedName = typeName.replace(/[\x00-\x1F\x7F]/g, '');
+        return {
+          name: sanitizedName || '未知类型',
+          value: Number(item.count || item.value || 0),
+          percentage: Number(item.percentage || 0)
+        };
+      }),
+      
+      // 处理人数据（原收件人数据）
+      receiverData: ensureArray(rawData.receiver_statistics || rawData.receiverData).map(item => ({
+        name: String(item.receiver_name || item.receiverName || item.assigned_to || item.name || ''),
+        value: Number(item.count || item.value || 0),
+        percentage: Number(item.percentage || 0),
+        completedCount: Number(item.completed_count || 0),
+        pendingCount: Number(item.pending_count || 0)
+      })),
+      
+      // 详细统计数据
+      typeDetailData: ensureArray(rawData.type_detail || []).map(item => ({
+        typeName: String(item.case_type || item.typeName || ''),
+        count: Number(item.count || 0),
+        percentage: String(item.percentage || '0%')
+      })),
+      
+      receiverDetailData: ensureArray(rawData.receiver_detail || []).map(item => ({
+        receiverName: String(item.receiver_name || item.assigned_to || ''),
+        count: Number(item.count || 0),
+        completedCount: Number(item.completed_count || 0),
+        pendingCount: Number(item.pending_count || 0),
+        percentage: String(item.percentage || '0%')
+      })),
+      
+      statusDetailData: ensureArray(rawData.status_statistics || []).map(item => ({
+        statusName: String(item.status || ''),
+        count: Number(item.count || 0),
+        percentage: String(item.percentage || '0%')
+      })),
+      
+      // 原有数据结构保持兼容
+      receiver_types: ensureArray(rawData.receiver_types),
+      receiver_ranking: roleLabels.reduce((acc, role) => {
+        acc[role] = ensureArray(rawData.receiver_ranking?.[role]).map(item => normalizeRankingItem(item));
+        return acc;
+      }, {}),
+  
+      developer_data: ensureArray(rawData.developer_data).map(item => normalizeDeveloperItem(item)),
+      
+      // 保留原始数据中的其他字段
+      ...rawData
+    };
+  
+  return normalized;
+  };
+  
+  /**
+   * 获取默认统计数据
+   * @returns {Object} 默认的统计数据结构
+   */
+  const getDefaultStatisticsData = () => {
+    return {
+      totalCount: 0,
+      completedCount: 0,
+      pendingCount: 0,
+      allocatedCount: 0,
+      assignedCount: 0,
+      inProgressCount: 0,
+      typeData: [],
+      receiverData: [],
+      typeDetailData: [],
+      receiverDetailData: [],
+      statusDetailData: [],
+      receiver_types: [],
+      receiver_ranking: { '处理人': [], '收件人': [], '审核人': [] },
+      developer_data: []
+    };
+  };
+  
+  /**
+   * 确保数据是数组类型
+   * @param {*} data - 需要检查的数据
+   * @returns {Array} 过滤后的数组或空数组
+   */
+  const ensureArray = (data) => {
+    if (Array.isArray(data)) {
+      // 过滤掉无效数据项
+      return data.filter(item => item && typeof item === 'object');
+    }
+    return [];
+  };
+  
+  /**
+   * 更新时间筛选
+   * @param {string} filter - 时间筛选类型
+   */
+  const updateTimeFilter = (filter) => {
+    if (['day', 'week', 'month', 'year'].includes(filter)) {
+      timeFilter.value = filter;
+      // 自动加载新数据
+      loadStatistics();
+    } else {
+      console.warn(`无效的时间筛选器: ${filter}`);
+    }
+  };
+  
+  /**
+   * 更新年份选择
+   * @param {number} year - 年份值
+   */
+  const updateYear = (year) => {
+    if (Number.isInteger(year) && year >= 2000 && year <= new Date().getFullYear() + 5) {
+      timeFilterState.year = year;
+      // 自动加载新数据
+      loadStatistics();
+    } else {
+      console.warn(`无效的年份: ${year}`);
+    }
+  };
+  
+  /**
+   * 更新月份选择
+   * @param {number} month - 月份值(1-12)
+   */
+  const updateMonth = (month) => {
+    if (Number.isInteger(month) && month >= 1 && month <= 12) {
+      timeFilterState.month = month;
+      // 自动加载新数据
+      loadStatistics();
+    } else {
+      console.warn(`无效的月份: ${month}`);
+    }
+  };
+  
+  /**
+   * 更新日期选择
+   * @param {string} day - 日期值，格式为YYYY-MM-DD
+   */
+  const updateDay = (day) => {
+    if (typeof day === 'string' && day.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      timeFilterState.day = day;
+      // 自动加载新数据
+      loadStatistics();
+    } else {
+      console.warn(`无效的日期格式: ${day}`);
+    }
+  };
+  
+  /**
+   * 更新角色选择
+   * @param {string} role - 角色类型
+   */
+  const updateActiveRole = (role) => {
+    if (roleLabels.includes(role)) {
+      activeRole.value = role;
+    } else {
+      console.warn(`无效的角色: ${role}`);
+    }
+  };
+  
+  /**
+   * 重置筛选条件
+   */
+  const resetFilters = () => {
+    timeFilter.value = 'month';
+    timeFilterState.year = new Date().getFullYear();
+    timeFilterState.month = new Date().getMonth() + 1;
+    timeFilterState.day = '';
+    activeRole.value = '收件人';
+    error.value = null;
+  };
+  
+  /**
+   * 手动处理错误
+   * @param {Error} err - 错误对象
+   * @param {string} [context=''] - 错误上下文描述
+   * @returns {string} 处理后的错误消息
+   */
+  const handleError = (err, context = '') => {
+    const errorContext = context ? `[${context}] ` : '';
+    const errorMessage = `${errorContext}${err.message || '未知错误'}`;
+    
+    console.error(errorMessage, err);
+    error.value = errorMessage;
+    
+    ElMessage.error(errorMessage);
+    
+    return errorMessage;
+  };
+  
+  // WebSocket事件监听处理函数
+  const handleStatisticsUpdate = (data) => {
+    console.log('收到统计数据更新通知:', data);
+    
+    // 确保组件仍挂载
+    if (!isMounted.value) return;
+    
+    // 自动重新加载统计数据
+    loadStatistics().then(() => {
+      console.log('统计数据已自动更新');
+    }).catch(err => {
+      console.error('自动更新统计数据失败:', err);
+    });
+  };
+
+  // 注册和取消注册WebSocket事件监听
+  let unsubscribeStatisticsUpdate = null;
+
+  // 在组合式函数内部添加生命周期钩子
+  onMounted(() => {
+    isMounted.value = true;
+  });
+
+  onUnmounted(() => {
+    isMounted.value = false;
+    removeWebSocketListeners();
+  });
+
+  const initWebSocketListeners = () => {
+    unsubscribeStatisticsUpdate = webSocketService.on('statisticsUpdate', handleStatisticsUpdate);
+  };
+
+  const removeWebSocketListeners = () => {
+    if (unsubscribeStatisticsUpdate) {
+      unsubscribeStatisticsUpdate();
+      unsubscribeStatisticsUpdate = null;
+    }
+  };
+
+  /**
+   * 返回公开的数据和方法
+   * @returns {Object} 组件可用的状态、计算属性和方法
+   */
+  return {
+    // 状态
+    statistics,
+    isLoading,
+    loading,
+    error,
+    
+    // 筛选条件
+    timeFilter,
+    timeFilterState,
+    activeRole,
+    
+    // 选项数据
+    yearOptions,
+    monthOptions,
+    roleLabels,
+    
+    // 计算属性（安全访问数据）
+    receiverTypes,
+    receiverRanking,
+    developerData,
+    monthlyCaseStats,
+    
+    // 方法
+    loadStatistics,
+    fetchStatistics,
+    updateTimeFilter,
+    updateYear,
+    updateMonth,
+    updateDay,
+    updateActiveRole,
+    resetFilters,
+    handleError,
+    validateStatisticsData,
+    initWebSocketListeners,
+    removeWebSocketListeners
+  };
+}

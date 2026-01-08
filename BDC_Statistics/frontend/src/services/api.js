@@ -129,6 +129,21 @@ export const messageAPI = {
   // 标记所有消息为已读
   markAllAsRead: wrapApiMethod(async () => {
     return await api.put('/messages/read-all');
+  }),
+  
+  // 获取在线用户列表
+  getOnlineUsers: wrapApiMethod(async () => {
+    return await api.get('/users/online');
+  }),
+  
+  // 获取所有用户列表
+  getAllUsers: wrapApiMethod(async () => {
+    return await api.get('/users/all');
+  }),
+  
+  // 发送消息
+  sendMessage: wrapApiMethod(async (messageData) => {
+    return await api.post('/messages/send', messageData);
   })
 };
 
@@ -142,6 +157,50 @@ export const developerAPI = {
   // 同步开发商信息
   syncDevelopers: wrapApiMethod(async () => {
     return await api.post('/developers/sync');
+  })
+};
+
+// 日志管理相关API
+export const logAPI = {
+  // 获取日志列表
+  getLogs: wrapApiMethod(async (params) => {
+    return await api.get('/admin/logs', { params });
+  }),
+  // 获取日志统计数据
+  getLogStats: wrapApiMethod(async (params) => {
+    return await api.get('/admin/logs/stats', { params });
+  }),
+  // 获取日志详情
+  getLogById: wrapApiMethod(async (logId) => {
+    return await api.get(`/admin/logs/${logId}`);
+  }),
+  // 清理旧日志
+  cleanOldLogs: wrapApiMethod(async (params) => {
+    return await api.delete('/admin/logs/clean', { params });
+  })
+};
+
+// 系统监控相关API
+export const monitoringAPI = {
+  // 获取监控数据列表
+  getMonitoringData: wrapApiMethod(async (params) => {
+    return await api.get('/admin/monitoring', { params });
+  }),
+  // 获取监控统计数据
+  getMonitoringStats: wrapApiMethod(async (params) => {
+    return await api.get('/admin/monitoring/stats', { params });
+  }),
+  // 获取最新监控数据
+  getLatestMonitoringData: wrapApiMethod(async () => {
+    return await api.get('/admin/monitoring/latest');
+  }),
+  // 手动收集监控数据
+  collectMonitoringData: wrapApiMethod(async () => {
+    return await api.post('/admin/monitoring/collect');
+  }),
+  // 清理旧监控数据
+  cleanOldMonitoringData: wrapApiMethod(async (params) => {
+    return await api.delete('/admin/monitoring/clean', { params });
   })
 };
 

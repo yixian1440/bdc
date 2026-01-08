@@ -122,12 +122,75 @@ class WebSocketService {
         case 'unsubscribe':
           this.handleUnsubscribe(clientId, message);
           break;
+        case 'identify':
+          this.handleUserIdentification(clientId, message);
+          break;
+        case 'chatMessage':
+          this.handleChatMessage(clientId, message);
+          break;
         default:
           console.log(`未知消息类型: ${message.type}`);
       }
     } catch (error) {
       console.error(`处理客户端消息错误，ID: ${clientId}`, error);
     }
+  }
+  
+  /**
+   * 处理聊天消息
+   * @param {string} clientId - 客户端ID
+   * @param {Object} message - 聊天消息对象
+   */
+  handleChatMessage(clientId, message) {
+    console.log(`处理聊天消息，来自客户端: ${clientId}，发送者: ${message.sender}`);
+    
+    // 广播聊天消息给所有客户端
+    this.broadcastToAllClients(message);
+  }
+  
+  /**
+   * 处理用户身份识别
+   * @param {string} clientId - 客户端ID
+   * @param {Object} message - 消息对象
+   */
+  handleUserIdentification(clientId, message) {
+    const { userId, userName, userRole } = message;
+    const client = this.clients.get(clientId);
+    
+    if (client) {
+      // 存储用户信息
+      client.userId = userId;
+      client.userName = userName;
+      client.userRole = userRole;
+      console.log(`客户端 ${clientId} 已识别为用户: ${userName} (ID: ${userId}, 角色: ${userRole})`);
+      
+      // 发送识别确认
+      this.sendMessageToClient(clientId, {
+        type: 'identify_ack',
+        message: `身份识别成功，欢迎 ${userName}`,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+  
+  /**
+   * 获取在线用户列表
+   * @returns {Array} 在线用户列表
+   */
+  getOnlineUsers() {
+    const onlineUsers = [];
+    
+    this.clients.forEach((client) => {
+      if (client.userId) {
+        onlineUsers.push({
+          id: client.userId,
+          name: client.userName,
+          role: client.userRole
+        });
+      }
+    });
+    
+    return onlineUsers;
   }
 
   /**

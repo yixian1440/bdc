@@ -76,6 +76,20 @@ const routes = [
         path: 'messages', 
         component: () => import('./views/Messages.vue'), 
         name: 'my-messages'
+      },
+      
+      // 系统管理（仅管理员）
+      { 
+        path: 'system/logs', 
+        component: () => import('./views/system/LogManagement.vue'), 
+        name: 'log-management',
+        meta: { role: '管理员' } 
+      },
+      { 
+        path: 'system/monitoring', 
+        component: () => import('./views/system/SystemMonitoring.vue'), 
+        name: 'system-monitoring',
+        meta: { role: '管理员' } 
       }
     ]
   }

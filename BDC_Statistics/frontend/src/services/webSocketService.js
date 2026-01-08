@@ -108,6 +108,9 @@ class WebSocketService {
 
     // 订阅事件
     subscribeToEvents() {
+        // 发送用户身份信息
+        this.sendUserIdentification();
+        
         // 订阅案件更新事件
         this.send({
             type: 'subscribe',
@@ -120,10 +123,29 @@ class WebSocketService {
             channel: 'statistics'
         });
     }
+    
+    // 发送用户身份信息
+    sendUserIdentification() {
+        const userInfo = localStorage.getItem('userInfo');
+        if (userInfo) {
+            try {
+                const { id, real_name, role } = JSON.parse(userInfo);
+                this.send({
+                    type: 'identify',
+                    userId: id,
+                    userName: real_name,
+                    userRole: role
+                });
+                console.log('已发送用户身份信息到WebSocket服务器');
+            } catch (error) {
+                console.error('解析用户信息失败:', error);
+            }
+        }
+    }
 
     // 处理收到的消息
     handleMessage(data) {
-        const { type, caseData, statsData, action, reminderData } = data;
+        const { type, caseData, statsData, action, reminderData, title, content, messageType } = data;
 
         if (type === 'caseUpdate') {
             if (this.eventCallbacks.has('caseUpdate')) {
@@ -155,6 +177,28 @@ class WebSocketService {
                         callback(reminderData);
                     } catch (error) {
                         console.error('执行pollingReminder事件回调失败:', error);
+                    }
+                });
+            }
+        } else if (type === 'messageNotification') {
+            if (this.eventCallbacks.has('messageNotification')) {
+                const callbacks = this.eventCallbacks.get('messageNotification');
+                callbacks.forEach(callback => {
+                    try {
+                        callback({ title, content, messageType });
+                    } catch (error) {
+                        console.error('执行messageNotification事件回调失败:', error);
+                    }
+                });
+            }
+        } else if (type === 'chatMessage') {
+            if (this.eventCallbacks.has('chatMessage')) {
+                const callbacks = this.eventCallbacks.get('chatMessage');
+                callbacks.forEach(callback => {
+                    try {
+                        callback(data);
+                    } catch (error) {
+                        console.error('执行chatMessage事件回调失败:', error);
                     }
                 });
             }

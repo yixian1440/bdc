@@ -1,4 +1,5 @@
 import db from '../config/database.js';
+import webSocketService from './webSocketService.js';
 
 /**
  * 消息通知服务
@@ -315,6 +316,61 @@ class NotificationService {
         } catch (error) {
             console.error('标记所有消息已读失败:', error);
             throw error;
+        }
+    }
+    
+    /**
+     * 发送自定义消息
+     * @param {Array<number>} userIds - 接收用户ID列表
+     * @param {string} title - 消息标题
+     * @param {string} content - 消息内容
+     * @param {string} messageType - 消息类型
+     * @returns {Promise<Array>} 创建的消息对象列表
+     */
+    static async sendCustomMessage(userIds, title, content, messageType) {
+        try {
+            const promises = userIds.map(userId => 
+                this.createNotification(userId, title, content, messageType)
+            );
+            
+            const messages = await Promise.all(promises);
+            
+            // 通过WebSocket发送实时通知
+            this.sendWebSocketNotification(userIds, title, content, messageType);
+            
+            return messages;
+        } catch (error) {
+            console.error('发送自定义消息失败:', error);
+            throw error;
+        }
+    }
+    
+    /**
+     * 通过WebSocket发送消息通知
+     * @param {Array<number>} userIds - 接收用户ID列表
+     * @param {string} title - 消息标题
+     * @param {string} content - 消息内容
+     * @param {string} messageType - 消息类型
+     */
+    static sendWebSocketNotification(userIds, title, content, messageType) {
+        try {
+            const notificationMessage = {
+                type: 'messageNotification',
+                title,
+                content,
+                messageType,
+                timestamp: new Date().toISOString()
+            };
+            
+            // 广播到所有客户端
+            webSocketService.broadcastToAllClients(notificationMessage);
+            
+            // 同时发送到消息频道
+            webSocketService.broadcastToChannel('messages', notificationMessage);
+            
+            console.log(`已通过WebSocket发送消息通知，接收用户数: ${userIds.length}`);
+        } catch (error) {
+            console.error('发送WebSocket消息通知失败:', error);
         }
     }
 }

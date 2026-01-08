@@ -11,6 +11,7 @@ import userRoutes from './routes/users.js';
 import developerRoutes from './routes/developers.js';
 import indexOptimizationRoutes from './routes/indexOptimization.js';
 import messageRoutes from './routes/messages.js';
+import adminRoutes from './routes/admin.js';
 import db from './config/database.js';
 import cacheMiddleware from './middleware/cacheMiddleware.js';
 // 导入WebSocket服务
@@ -31,6 +32,9 @@ initializePerformanceMonitoring();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// 配置信任代理，以正确获取客户端IP地址
+app.set('trust proxy', true);
 
 // 全局错误捕获
 process.on('uncaughtException', (err) => {
@@ -122,6 +126,9 @@ app.use('/api', apiRouter);
 
 // 索引优化路由
 app.use('/api/index-optimization', indexOptimizationRoutes);
+
+// 管理员路由
+app.use('/api/admin', adminRoutes);
 
 // 健康检查端点
 app.get('/health', (req, res) => {

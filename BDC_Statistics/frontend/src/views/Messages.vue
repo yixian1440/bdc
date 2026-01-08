@@ -6,17 +6,115 @@
         我的消息
         <el-badge v-if="unreadCount > 0" :value="unreadCount" type="danger" class="unread-badge" />
       </h2>
-      <el-button 
-        type="primary" 
-        size="large"
-        @click="markAllAsRead"
-        :disabled="unreadCount === 0"
-        class="mark-all-btn"
-      >
-        <el-icon><Reading /></el-icon>
-        全部标为已读
-      </el-button>
+      <div class="header-actions">
+        <el-button 
+          type="primary" 
+          size="large"
+          @click="toggleSendMessage"
+          class="send-message-btn"
+        >
+          <el-icon><ChatDotRound /></el-icon>
+          发送消息
+        </el-button>
+        <el-button 
+          type="primary" 
+          size="large"
+          @click="markAllAsRead"
+          :disabled="unreadCount === 0"
+          class="mark-all-btn"
+        >
+          <el-icon><Reading /></el-icon>
+          全部标为已读
+        </el-button>
+      </div>
     </div>
+    
+    <!-- 发送消息弹窗 -->
+    <el-dialog
+      v-model="sendMessageVisible"
+      title="发送消息"
+      width="600px"
+      custom-class="send-message-dialog"
+    >
+      <div class="send-message-form">
+        <!-- 所有用户列表 -->
+        <div class="form-item">
+          <el-label>接收用户：</el-label>
+          <el-select
+            v-model="selectedUsers"
+            multiple
+            placeholder="选择接收消息的用户"
+            size="large"
+            class="user-select"
+          >
+            <el-option
+              v-for="user in allUsers"
+              :key="user.id"
+              :label="user.real_name || user.username"
+              :value="user.id"
+            >
+              <div class="user-option">
+                <div class="user-info">
+                  <span class="user-name">{{ user.real_name || user.username }}</span>
+                  <span class="user-role">({{ user.role }})</span>
+                </div>
+                <el-tag 
+                  :type="isUserOnline(user.id) ? 'success' : 'info'" 
+                  size="small" 
+                  class="online-tag"
+                >
+                  {{ isUserOnline(user.id) ? '在线' : '离线' }}
+                </el-tag>
+              </div>
+            </el-option>
+          </el-select>
+        </div>
+        
+        <!-- 消息标题 -->
+        <div class="form-item">
+          <el-input
+            v-model="messageForm.title"
+            placeholder="消息标题"
+            size="large"
+            class="title-input"
+          />
+        </div>
+        
+        <!-- 消息内容 -->
+        <div class="form-item">
+          <el-input
+            v-model="messageForm.content"
+            type="textarea"
+            :rows="4"
+            placeholder="消息内容"
+            size="large"
+            class="content-input"
+          />
+        </div>
+        
+        <!-- 消息类型 -->
+        <div class="form-item">
+          <el-select
+            v-model="messageForm.messageType"
+            placeholder="消息类型"
+            size="large"
+            class="type-select"
+          >
+            <el-option label="系统通知" value="系统通知" />
+            <el-option label="新任务通知" value="新任务通知" />
+            <el-option label="统计通知" value="统计通知" />
+          </el-select>
+        </div>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button size="large" @click="sendMessageVisible = false">取消</el-button>
+          <el-button size="large" type="primary" @click="sendMessage" :loading="sendingMessage">
+            {{ sendingMessage ? '发送中...' : '发送消息' }}
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
     
     <el-card shadow="hover" class="messages-card">
       <!-- 消息过滤和搜索 -->
@@ -45,6 +143,7 @@
             <el-option label="统计通知" value="统计通知" />
             <el-option label="队列变更通知" value="队列变更通知" />
             <el-option label="轮询提醒" value="轮询提醒" />
+            <el-option label="系统通知" value="系统通知" />
           </el-select>
         </div>
         <div class="filter-item">
@@ -190,14 +289,85 @@
         />
       </div>
     </el-card>
+    
+    <!-- 聊天室区域 -->
+    <el-card shadow="hover" class="chat-room-card">
+      <template #header>
+        <div class="chat-room-header">
+          <h3 class="chat-room-title">
+            <el-icon><ChatLineRound /></el-icon>
+            聊天室
+          </h3>
+          <div class="online-count">
+            <el-tag type="success" size="small">
+              <el-icon><User /></el-icon>
+              在线 {{ onlineUsers.length }} 人
+            </el-tag>
+          </div>
+        </div>
+      </template>
+      
+      <!-- 聊天室消息列表 -->
+      <div class="chat-messages-container">
+        <div 
+          v-for="(chatMsg, index) in chatMessages" 
+          :key="index"
+          :class="['chat-message-item', { 'own-message': chatMsg.isOwn }]"
+        >
+          <div class="chat-message-header">
+            <span class="chat-message-sender">{{ chatMsg.sender }}</span>
+            <span class="chat-message-time">{{ formatRelativeTime(chatMsg.timestamp) }}</span>
+          </div>
+          <div class="chat-message-content">
+            {{ chatMsg.content }}
+          </div>
+        </div>
+        
+        <!-- 空状态 -->
+        <el-empty 
+          v-if="chatMessages.length === 0"
+          description="暂无聊天消息"
+          class="chat-empty-state"
+        >
+          <template #image>
+            <el-icon class="empty-icon"><ChatLineRound /></el-icon>
+          </template>
+        </el-empty>
+      </div>
+      
+      <!-- 聊天输入区域 -->
+      <div class="chat-input-container">
+        <el-input
+          v-model="chatInput"
+          type="textarea"
+          :rows="3"
+          placeholder="输入消息..."
+          resize="none"
+          class="chat-input"
+        />
+        <div class="chat-actions">
+          <el-button 
+            type="primary" 
+            size="large" 
+            @click="sendChatMessage"
+            :disabled="!chatInput.trim()"
+            class="send-chat-btn"
+          >
+            <el-icon><Message /></el-icon>
+            发送
+          </el-button>
+        </div>
+      </div>
+    </el-card>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { messageAPI } from '../services/api'
-import { ElMessage } from 'element-plus'
-import { Message, Reading, CircleClose, ArrowLeft } from '@element-plus/icons-vue'
+import { ElMessage, ElNotification } from 'element-plus'
+import { Message, Reading, CircleClose, ArrowLeft, ChatDotRound, ChatLineRound, User } from '@element-plus/icons-vue'
+import webSocketService from '../services/webSocketService'
 
 // 状态管理
 const loading = ref(false)
@@ -215,24 +385,53 @@ const pagination = ref({
 const activeMessageId = ref(null)
 const activeMessage = ref(null)
 
-// 计算过滤后的消息
+// 发送消息相关状态
+const sendMessageVisible = ref(false)
+const selectedUsers = ref([])
+const messageForm = ref({
+  title: '',
+  content: '',
+  messageType: '系统通知'
+})
+const allUsers = ref([])
+const onlineUsers = ref([])
+const sendingMessage = ref(false)
+
+// 聊天室相关状态
+const chatMessages = ref([])
+const chatInput = ref('')
+const currentUser = ref(JSON.parse(localStorage.getItem('userInfo')) || {})
+
+// 计算过滤后的消息，确保系统通知置顶
 const filteredMessages = computed(() => {
-  return messages.value.filter(message => {
-    // 关键词过滤
-    const keywordMatch = !searchKeyword.value || 
-      message.title.includes(searchKeyword.value) || 
-      message.content.includes(searchKeyword.value)
-    
-    // 类型过滤
-    const typeMatch = !selectedType.value || message.message_type === selectedType.value
-    
-    // 状态过滤
-    const statusMatch = !selectedStatus.value || 
-      (selectedStatus.value === 'unread' && !message.is_read) || 
-      (selectedStatus.value === 'read' && message.is_read)
-    
-    return keywordMatch && typeMatch && statusMatch
-  })
+  return messages.value
+    .filter(message => {
+      // 关键词过滤
+      const keywordMatch = !searchKeyword.value || 
+        message.title.includes(searchKeyword.value) || 
+        message.content.includes(searchKeyword.value)
+      
+      // 类型过滤
+      const typeMatch = !selectedType.value || message.message_type === selectedType.value
+      
+      // 状态过滤
+      const statusMatch = !selectedStatus.value || 
+        (selectedStatus.value === 'unread' && !message.is_read) || 
+        (selectedStatus.value === 'read' && message.is_read)
+      
+      return keywordMatch && typeMatch && statusMatch
+    })
+    .sort((a, b) => {
+      // 系统通知永远置顶
+      if (a.message_type === '系统通知' && b.message_type !== '系统通知') {
+        return -1
+      }
+      if (a.message_type !== '系统通知' && b.message_type === '系统通知') {
+        return 1
+      }
+      // 其他消息按时间倒序
+      return new Date(b.created_at) - new Date(a.created_at)
+    })
 })
 
 // 获取消息类型对应的颜色
@@ -282,6 +481,11 @@ const formatDate = (dateString) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+// 判断用户是否在线
+const isUserOnline = (userId) => {
+  return onlineUsers.value.some(user => user.id === userId)
 }
 
 // 获取消息列表
@@ -400,10 +604,179 @@ const handleCurrentChange = (currentPage) => {
   fetchMessages()
 }
 
+// 切换发送消息弹窗
+const toggleSendMessage = async () => {
+  // 获取所有用户列表
+  await getAllUsers()
+  // 获取在线用户列表
+  await getOnlineUsers()
+  sendMessageVisible.value = true
+}
+
+// 获取所有用户列表
+const getAllUsers = async () => {
+  try {
+    const response = await messageAPI.getAllUsers()
+    if (response.success) {
+      allUsers.value = response.data.users
+    } else {
+      ElMessage.error('获取用户列表失败')
+    }
+  } catch (error) {
+    console.error('获取用户列表错误:', error)
+    ElMessage.error('获取用户列表失败，请稍后重试')
+  }
+}
+
+// 获取在线用户列表
+const getOnlineUsers = async () => {
+  try {
+    const response = await messageAPI.getOnlineUsers()
+    if (response.success) {
+      onlineUsers.value = response.data.users
+    } else {
+      ElMessage.error('获取在线用户列表失败')
+    }
+  } catch (error) {
+    console.error('获取在线用户列表错误:', error)
+    ElMessage.error('获取在线用户列表失败，请稍后重试')
+  }
+}
+
+// 发送消息
+const sendMessage = async () => {
+  if (!selectedUsers.value || selectedUsers.value.length === 0) {
+    ElMessage.warning('请选择至少一个接收用户')
+    return
+  }
+  
+  if (!messageForm.value.title) {
+    ElMessage.warning('请输入消息标题')
+    return
+  }
+  
+  if (!messageForm.value.content) {
+    ElMessage.warning('请输入消息内容')
+    return
+  }
+  
+  sendingMessage.value = true
+  try {
+    const response = await messageAPI.sendMessage({
+      userIds: selectedUsers.value,
+      title: messageForm.value.title,
+      content: messageForm.value.content,
+      messageType: messageForm.value.messageType
+    })
+    
+    if (response.success) {
+      ElMessage.success('消息发送成功')
+      sendMessageVisible.value = false
+      // 重置表单
+      selectedUsers.value = []
+      messageForm.value = {
+        title: '',
+        content: '',
+        messageType: '系统通知'
+      }
+    } else {
+      ElMessage.error('消息发送失败')
+    }
+  } catch (error) {
+    console.error('发送消息错误:', error)
+    ElMessage.error('消息发送失败，请稍后重试')
+  } finally {
+    sendingMessage.value = false
+  }
+}
+
+// 发送聊天消息
+const sendChatMessage = async () => {
+  if (!chatInput.value.trim()) {
+    return
+  }
+  
+  try {
+    const chatMessage = {
+      type: 'chatMessage',
+      sender: currentUser.value.real_name || currentUser.value.username || '未知用户',
+      senderId: currentUser.value.id,
+      content: chatInput.value.trim(),
+      timestamp: new Date().toISOString()
+    }
+    
+    // 发送WebSocket消息
+    webSocketService.send(chatMessage)
+    
+    // 添加到本地聊天记录
+    chatMessages.value.push({
+      ...chatMessage,
+      isOwn: true
+    })
+    
+    // 清空输入框
+    chatInput.value = ''
+  } catch (error) {
+    console.error('发送聊天消息错误:', error)
+    ElMessage.error('发送消息失败，请稍后重试')
+  }
+}
+
 // 初始加载
 onMounted(() => {
   fetchMessages()
+  
+  // 监听WebSocket消息通知
+  setupWebSocketListeners()
 })
+
+// 清理WebSocket监听器
+onUnmounted(() => {
+  if (messageNotificationListener) {
+    messageNotificationListener()
+  }
+  if (chatMessageListener) {
+    chatMessageListener()
+  }
+})
+
+// WebSocket监听器引用
+let messageNotificationListener = null
+let chatMessageListener = null
+
+// 设置WebSocket监听器
+const setupWebSocketListeners = () => {
+  // 监听消息通知
+  messageNotificationListener = webSocketService.on('messageNotification', (notification) => {
+    const { title, content, messageType } = notification
+    
+    // 显示通知
+    ElNotification({
+      title: '新消息',
+      message: content,
+      type: 'info',
+      duration: 5000,
+      showClose: true
+    })
+    
+    // 更新未读消息数量
+    fetchUnreadCount()
+    
+    // 刷新消息列表
+    fetchMessages()
+  })
+  
+  // 监听聊天消息
+  chatMessageListener = webSocketService.on('chatMessage', (chatMessage) => {
+    // 只添加来自其他用户的消息
+    if (chatMessage.senderId !== currentUser.value.id) {
+      chatMessages.value.push({
+        ...chatMessage,
+        isOwn: false
+      })
+    }
+  })
+}
 </script>
 
 <style scoped>
@@ -447,6 +820,31 @@ onMounted(() => {
   background: #ff7875;
 }
 
+.header-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.send-message-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #95de64 0%, #52c41a 100%);
+  border: none;
+  color: white;
+}
+
+.send-message-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(149, 222, 100, 0.3);
+  background: linear-gradient(135deg, #73d13d 0%, #389e0d 100%);
+}
+
 .mark-all-btn {
   display: flex;
   align-items: center;
@@ -472,6 +870,113 @@ onMounted(() => {
   transform: none;
   box-shadow: none;
   background: linear-gradient(135deg, #91d5ff 0%, #b37feb 100%);
+}
+
+/* 发送消息弹窗样式 */
+.send-message-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, #91d5ff 0%, #b37feb 100%);
+  padding: 24px;
+  border-radius: 16px 16px 0 0;
+}
+
+.send-message-dialog :deep(.el-dialog__title) {
+  font-size: 20px;
+  font-weight: 600;
+  color: white;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.send-message-dialog :deep(.el-dialog__body) {
+  padding: 32px 24px;
+  background: #f6ffed;
+}
+
+.send-message-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-select {
+  width: 100%;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.user-select:focus {
+  box-shadow: 0 0 0 2px rgba(149, 222, 100, 0.2);
+}
+
+.title-input {
+  width: 100%;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.title-input:focus {
+  box-shadow: 0 0 0 2px rgba(149, 222, 100, 0.2);
+}
+
+.content-input {
+  width: 100%;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  resize: vertical;
+}
+
+.content-input:focus {
+  box-shadow: 0 0 0 2px rgba(149, 222, 100, 0.2);
+}
+
+.type-select {
+  width: 100%;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.type-select:focus {
+  box-shadow: 0 0 0 2px rgba(149, 222, 100, 0.2);
+}
+
+.user-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-name {
+  font-weight: 600;
+  color: #597ef7;
+}
+
+.user-role {
+  font-size: 12px;
+  color: #909399;
+}
+
+.online-tag {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.send-message-dialog :deep(.el-dialog__footer) {
+  background: #f6ffed;
+  padding: 24px;
+  border-radius: 0 0 16px 16px;
+  border-top: 2px solid #d9f7be;
 }
 
 /* 卡片样式 */
@@ -940,6 +1445,179 @@ onMounted(() => {
   }
 }
 
+/* 聊天室相关样式 */
+.chat-room-card {
+  margin-top: 24px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e6f7ff;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.chat-room-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.chat-room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+}
+
+.chat-room-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 20px;
+  font-weight: 600;
+  color: #597ef7;
+  margin: 0;
+}
+
+.chat-room-title :deep(.el-icon) {
+  font-size: 24px;
+  color: #91d5ff;
+}
+
+.online-count {
+  display: flex;
+  align-items: center;
+}
+
+.chat-messages-container {
+  max-height: 400px;
+  overflow-y: auto;
+  background: #f6ffed;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #b7eb8f;
+}
+
+.chat-message-item {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  max-width: 80%;
+  transition: all 0.3s ease;
+}
+
+.chat-message-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.chat-message-item:not(.own-message) {
+  align-self: flex-start;
+  background: white;
+  border: 1px solid #e6f7ff;
+  margin-right: auto;
+}
+
+.chat-message-item.own-message {
+  align-self: flex-end;
+  background: #e6f7ff;
+  border: 1px solid #91d5ff;
+  margin-left: auto;
+}
+
+.chat-message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.chat-message-sender {
+  font-weight: 600;
+  font-size: 14px;
+  color: #597ef7;
+}
+
+.chat-message-time {
+  font-size: 12px;
+  color: #909399;
+}
+
+.chat-message-content {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #606266;
+  word-wrap: break-word;
+}
+
+.chat-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  background: #f6ffed;
+  border-radius: 12px;
+  margin-top: 20px;
+  border: 1px solid #b7eb8f;
+}
+
+.chat-empty-state :deep(.el-empty__description) {
+  font-size: 14px;
+  color: #52c41a;
+}
+
+.chat-input-container {
+  padding: 20px;
+  background: #f6ffed;
+  border-top: 1px solid #b7eb8f;
+  border-radius: 0 0 16px 16px;
+}
+
+.chat-input {
+  width: 100%;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.chat-input:focus {
+  box-shadow: 0 0 0 2px rgba(149, 222, 100, 0.2);
+}
+
+.chat-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.send-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #95de64 0%, #52c41a 100%);
+  border: none;
+  color: white;
+}
+
+.send-chat-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(149, 222, 100, 0.3);
+  background: linear-gradient(135deg, #73d13d 0%, #389e0d 100%);
+}
+
+.send-chat-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  background: linear-gradient(135deg, #95de64 0%, #52c41a 100%);
+}
+
+/* 响应式设计 */
 @media (max-width: 768px) {
   .messages-container {
     padding: 10px;
@@ -978,6 +1656,28 @@ onMounted(() => {
     flex-direction: column;
     align-items: flex-start;
     gap: 8px;
+  }
+  
+  .chat-room-card {
+    margin-top: 16px;
+  }
+  
+  .chat-messages-container {
+    margin: 10px;
+    padding: 12px;
+    max-height: 300px;
+  }
+  
+  .chat-message-item {
+    max-width: 90%;
+  }
+  
+  .chat-input-container {
+    padding: 12px;
+  }
+  
+  .chat-input {
+    min-height: 60px;
   }
 }
 </style>

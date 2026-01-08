@@ -45,12 +45,12 @@ const verifyAdmin = (req, res, next) => {
  */
 router.get('/projects', async (req, res) => {
     try {
-        // 查询所有唯一的开发商名称，用于表单选择
+        // 查询所有开发商，优先从developers表获取，确保能看到所有维护的开发商
         const query = `
-            SELECT DISTINCT developer as project_name 
-            FROM cases 
-            WHERE developer IS NOT NULL AND developer != ''
-            ORDER BY developer ASC
+            SELECT DISTINCT project_name 
+            FROM developers 
+            WHERE project_name IS NOT NULL AND project_name != ''
+            ORDER BY project_name ASC
         `;
         
         const [developers] = await db.execute(query);

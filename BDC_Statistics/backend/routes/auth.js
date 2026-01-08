@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import db from '../config/database.js';
+import LogService from '../services/LogService.js';
 
 const router = express.Router();
 // 确保JWT密钥有一个安全的默认值，不依赖环境变量
@@ -12,7 +13,20 @@ router.post('/login', async (req, res) => {
     try {
         const { username, password } = req.body;
         
+        // 获取客户端信息
+        const ipAddress = req.ip || req.connection.remoteAddress;
+        const userAgent = req.headers['user-agent'] || '';
+        
         if (!username || !password) {
+            // 记录登录失败日志
+            await LogService.logLogin({
+                username: username || '未知',
+                realName: '',
+                success: false,
+                ipAddress,
+                userAgent,
+                error: '用户名和密码不能为空'
+            });
             return res.status(400).json({ error: '用户名和密码不能为空' });
         }
 
@@ -22,6 +36,15 @@ router.post('/login', async (req, res) => {
         );
 
         if (users.length === 0) {
+            // 记录登录失败日志
+            await LogService.logLogin({
+                username,
+                realName: '',
+                success: false,
+                ipAddress,
+                userAgent,
+                error: '用户名不存在'
+            });
             return res.status(401).json({ error: '用户名或密码错误' });
         }
 
@@ -29,6 +52,15 @@ router.post('/login', async (req, res) => {
         const isValidPassword = await bcrypt.compare(password, user.password);
 
         if (!isValidPassword) {
+            // 记录登录失败日志
+            await LogService.logLogin({
+                username,
+                realName: user.real_name || '',
+                success: false,
+                ipAddress,
+                userAgent,
+                error: '密码错误'
+            });
             return res.status(401).json({ error: '用户名或密码错误' });
         }
 
@@ -43,6 +75,15 @@ router.post('/login', async (req, res) => {
             { expiresIn: '7d' }
         );
 
+        // 记录登录成功日志
+        await LogService.logLogin({
+            username,
+            realName: user.real_name || '',
+            success: true,
+            ipAddress,
+            userAgent
+        });
+
         res.json({
             message: '登录成功',
             token,
@@ -56,6 +97,17 @@ router.post('/login', async (req, res) => {
         });
     } catch (error) {
         console.error('登录错误:', error);
+        
+        // 记录登录错误日志
+        await LogService.logLogin({
+            username: req.body.username || '未知',
+            realName: '',
+            success: false,
+            ipAddress: req.ip || req.connection.remoteAddress,
+            userAgent: req.headers['user-agent'] || '',
+            error: error.message || '服务器内部错误'
+        });
+        
         res.status(500).json({ error: '服务器内部错误' });
     }
 });
