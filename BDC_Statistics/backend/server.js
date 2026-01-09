@@ -60,7 +60,7 @@ app.use(cors({
 // 速率限制
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分钟
-  max: 150, // 增加到每IP 15分钟150次请求
+  max: 500, // 增加到每IP 15分钟500次请求，适用于开发环境
   standardHeaders: true,
   legacyHeaders: false,
   // 添加更友好的错误处理
