@@ -147,20 +147,21 @@ export async function handleDeveloperTransferAllocation(db, userId, caseType) {
             return null;
         }
         
-        // 获取当前开发商转移案件总数，用于1:1循环分配
+        // 获取当天开发商转移案件数量，用于1:1循环分配
         const [totalCountResult] = await db.execute(
             `SELECT COUNT(*) as total 
              FROM cases 
-             WHERE case_type IN ('开发商转移', '开发商转移登记')`
+             WHERE case_type IN ('开发商转移', '开发商转移登记') 
+             AND DATE(created_at) = CURRENT_DATE`
         );
         
         const totalCases = totalCountResult[0].total || 0;
         
-        // 1:1循环分配：根据总案件数取模确定下一个收件人
+        // 1:1循环分配：根据当天案件数取模确定下一个收件人
         const nextIndex = totalCases % availableReceivers.length;
         const nextReceiver = availableReceivers[nextIndex];
         
-        console.log(`开发商转移案件1:1循环分配 - 总案件数: ${totalCases}, 收件人数: ${availableReceivers.length}, 分配索引: ${nextIndex}, 分配收件人: ${nextReceiver.real_name}`);
+        console.log(`开发商转移案件1:1循环分配 - 当天案件数: ${totalCases}, 收件人数: ${availableReceivers.length}, 分配索引: ${nextIndex}, 分配收件人: ${nextReceiver.real_name}`);
         
         return nextReceiver;
     } catch (error) {
