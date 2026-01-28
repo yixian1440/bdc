@@ -223,6 +223,9 @@ router.put('/:id', authenticateToken, verifyAdmin, async (req, res) => {
             return res.status(400).json({ error: '角色必须是收件人、开发商或国资企业专窗' });
         }
 
+        // 确保status不为空字符串
+        const statusValue = (status && status.trim() !== '') ? status : '正常';
+
         // 检查用户是否存在
         const [existingUsers] = await db.execute(
             'SELECT id FROM users WHERE id = ?',
@@ -235,10 +238,10 @@ router.put('/:id', authenticateToken, verifyAdmin, async (req, res) => {
 
         await db.execute(
             'UPDATE users SET real_name = ?, role = ?, expertise_level = ?, status = ? WHERE id = ?',
-            [real_name, role, expertise_level || 1, status || '正常', id]
+            [real_name, role, expertise_level || 1, statusValue, id]
         );
 
-        res.json({ message: '用户信息更新成功' });
+        res.json({ message: '用户信息更新成功', updatedStatus: statusValue });
     } catch (error) {
         console.error('更新用户错误:', error);
         res.status(500).json({ error: '服务器内部错误' });

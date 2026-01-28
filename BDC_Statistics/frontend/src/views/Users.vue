@@ -393,25 +393,24 @@ const submitForm = async () => {
     if (!userFormRef.value) return
     await userFormRef.value.validate()
     
-    // 确保status字段有值
-    if (!userForm.status) {
-      userForm.status = '正常'
-    }
-    
     submitting.value = true
+    
+    // 确保status字段有值且不为空字符串
+    const statusValue = userForm.status && userForm.status.trim() !== '' ? userForm.status : '正常'
     
     const formData = {
       username: userForm.username,
       real_name: userForm.name,
       role: userForm.role,
-      status: userForm.status
+      status: statusValue
     }
+    
+    console.log('提交用户更新:', { userId: userForm.id, formData })
     
     if (!isEditMode.value) {
       formData.password = userForm.password
       await userAPI.addUser(formData)
       ElMessage.success('用户添加成功')
-      // 重新加载用户列表
       await loadUsers()
     } else {
       await userAPI.updateUser(userForm.id, formData)
@@ -422,15 +421,15 @@ const submitForm = async () => {
       if (userIndex !== -1) {
         users.value[userIndex] = {
           ...users.value[userIndex],
-          status: userForm.status
+          status: statusValue
         }
       }
       
-      // 然后重新加载用户列表以确保数据一致性
+      // 强制刷新用户列表以确保数据一致性
+      users.value = [...users.value]
       await loadUsers()
     }
     
-    // 关闭对话框
     dialogVisible.value = false
   } catch (error) {
     console.error('保存用户失败:', error)
