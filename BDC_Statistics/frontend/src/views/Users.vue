@@ -361,7 +361,8 @@ const editUser = (user) => {
   // 使用前端name或后端real_name
   userForm.name = user.name || user.real_name
   userForm.role = user.role
-  userForm.status = user.status
+  // 为status设置默认值，确保不会为null或undefined
+  userForm.status = user.status || '正常'
   dialogVisible.value = true
 }
 
@@ -413,8 +414,9 @@ const submitForm = async () => {
       ElMessage.success('用户更新成功')
     }
     
-    dialogVisible.value = false
+    // 先刷新用户列表，然后再关闭对话框，确保用户可以立即看到更新后的状态
     await loadUsers()
+    dialogVisible.value = false
   } catch (error) {
     console.error('保存用户失败:', error)
     ElMessage.error('保存失败，请稍后重试')
