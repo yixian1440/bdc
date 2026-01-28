@@ -133,7 +133,7 @@ export async function allocateCase(db, caseId, previousReceiverId, receiver, all
  */
 export async function handleDeveloperTransferAllocation(db, userId, caseType) {
     try {
-        // 对于开发商转移案件，采用1:1循环平均分配
+        // 对于开发商转移案件，采用绝对公平的轮转分配
         // 只从收件人和国资企业专窗角色获取可用用户
         const [availableReceivers] = await db.execute(
             `SELECT id, real_name 
@@ -147,21 +147,38 @@ export async function handleDeveloperTransferAllocation(db, userId, caseType) {
             return null;
         }
         
-        // 获取当天开发商转移案件数量，用于1:1循环分配
-        const [totalCountResult] = await db.execute(
-            `SELECT COUNT(*) as total 
+        // 获取每个收件人的历史分配次数
+        const [historyCaseCounts] = await db.execute(
+            `SELECT receiver_id, COUNT(*) as case_count 
              FROM cases 
              WHERE case_type IN ('开发商转移', '开发商转移登记') 
-             AND DATE(created_at) = CURRENT_DATE`
+             GROUP BY receiver_id`
         );
         
-        const totalCases = totalCountResult[0].total || 0;
+        // 将查询结果转换为Map，便于快速查找
+        const caseCountMap = new Map(historyCaseCounts.map(item => [item.receiver_id, item.case_count]));
         
-        // 1:1循环分配：根据当天案件数取模确定下一个收件人
-        const nextIndex = totalCases % availableReceivers.length;
-        const nextReceiver = availableReceivers[nextIndex];
+        // 为每个可用收件人添加历史案件数
+        const receiversWithCount = availableReceivers.map(receiver => ({
+            ...receiver,
+            case_count: caseCountMap.get(receiver.id) || 0
+        }));
         
-        console.log(`开发商转移案件1:1循环分配 - 当天案件数: ${totalCases}, 收件人数: ${availableReceivers.length}, 分配索引: ${nextIndex}, 分配收件人: ${nextReceiver.real_name}`);
+        // 按历史案件数升序排序，若案件数相同则按ID升序排序
+        receiversWithCount.sort((a, b) => {
+            // 首先按案件数排序
+            if (a.case_count !== b.case_count) {
+                return a.case_count - b.case_count;
+            }
+            // 案件数相同时，按ID排序作为tiebreaker
+            return a.id - b.id;
+        });
+        
+        // 选择历史案件数最少的收件人
+        const nextReceiver = receiversWithCount[0];
+        
+        console.log(`开发商转移案件绝对公平分配 - 收件人: ${nextReceiver.real_name}, 历史案件数: ${nextReceiver.case_count}`);
+        console.log(`所有收件人历史案件数:`, receiversWithCount.map(r => `${r.real_name}: ${r.case_count}`));
         
         return nextReceiver;
     } catch (error) {
