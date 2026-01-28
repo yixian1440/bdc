@@ -395,7 +395,12 @@ const resetDeleteDialog = () => {
 
 const submitForm = async () => {
   try {
+    console.log('开始提交表单...')
+    console.log('当前userForm状态:', userForm)
+    
     await userFormRef.value.validate()
+    console.log('表单验证通过')
+    
     submitting.value = true
     
     const formData = {
@@ -405,23 +410,32 @@ const submitForm = async () => {
       status: userForm.status
     }
     
+    console.log('提交的数据:', formData)
+    
     if (!isEditMode.value) {
       formData.password = userForm.password
+      console.log('添加新用户')
       await userAPI.addUser(formData)
       ElMessage.success('用户添加成功')
     } else {
+      console.log('更新用户，用户ID:', userForm.id)
       await userAPI.updateUser(userForm.id, formData)
       ElMessage.success('用户更新成功')
     }
     
     // 先刷新用户列表，然后再关闭对话框，确保用户可以立即看到更新后的状态
+    console.log('刷新用户列表...')
     await loadUsers()
+    console.log('用户列表刷新完成')
+    
     dialogVisible.value = false
+    console.log('对话框已关闭')
   } catch (error) {
     console.error('保存用户失败:', error)
     ElMessage.error('保存失败，请稍后重试')
   } finally {
     submitting.value = false
+    console.log('提交完成，submitting状态重置为false')
   }
 }
 

@@ -215,30 +215,57 @@ router.put('/:id', authenticateToken, verifyAdmin, async (req, res) => {
         const { id } = req.params;
         const { real_name, role, expertise_level, status } = req.body;
         
+        console.log('收到用户更新请求，用户ID:', id);
+        console.log('更新数据:', { real_name, role, expertise_level, status });
+        
         if (!real_name || !role) {
+            console.error('必填字段不能为空:', { real_name, role });
             return res.status(400).json({ error: '必填字段不能为空' });
         }
 
         if (!['收件人', '开发商', '国资企业专窗'].includes(role)) {
+            console.error('角色必须是收件人、开发商或国资企业专窗:', role);
             return res.status(400).json({ error: '角色必须是收件人、开发商或国资企业专窗' });
         }
 
         // 检查用户是否存在
+        console.log('检查用户是否存在，用户ID:', id);
         const [existingUsers] = await db.execute(
-            'SELECT id FROM users WHERE id = ?',
+            'SELECT id, status FROM users WHERE id = ?',
             [id]
         );
 
         if (existingUsers.length === 0) {
+            console.error('用户不存在:', id);
             return res.status(404).json({ error: '用户不存在' });
         }
 
-        await db.execute(
+        console.log('用户存在，当前状态:', existingUsers[0].status);
+        console.log('更新后的状态:', status);
+
+        console.log('执行更新操作...');
+        const [result] = await db.execute(
             'UPDATE users SET real_name = ?, role = ?, expertise_level = ?, status = ? WHERE id = ?',
             [real_name, role, expertise_level || 1, status || '正常', id]
         );
 
-        res.json({ message: '用户信息更新成功' });
+        console.log('更新结果:', result);
+        console.log('影响的行数:', result.affectedRows);
+
+        // 验证更新是否成功
+        if (result.affectedRows === 0) {
+            console.error('更新失败，没有影响任何行:', id);
+            return res.status(404).json({ error: '更新失败，用户不存在或数据无变化' });
+        }
+
+        // 验证更新后的状态
+        const [updatedUser] = await db.execute(
+            'SELECT status FROM users WHERE id = ?',
+            [id]
+        );
+        console.log('更新后的实际状态:', updatedUser[0].status);
+
+        res.json({ message: '用户信息更新成功', updatedStatus: updatedUser[0].status });
     } catch (error) {
         console.error('更新用户错误:', error);
         res.status(500).json({ error: '服务器内部错误' });
