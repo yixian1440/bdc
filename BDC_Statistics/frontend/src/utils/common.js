@@ -295,12 +295,17 @@ export const handleApiResponse = (response) => {
     // 情况1: 响应包含cases数组和total字段
     result.cases = response.cases;
     result.total = response.total || response.pagination?.total || response.cases.length;
-    result.pagination = response.pagination || {
-      total: result.total,
-      page: 1,
-      pageSize: 10,
-      totalPages: Math.ceil(result.total / 10)
-    };
+    // 优先使用response.pagination，否则从顶层字段构建pagination
+    if (response.pagination) {
+      result.pagination = response.pagination;
+    } else {
+      result.pagination = {
+        total: result.total,
+        page: parseInt(response.page) || 1,
+        pageSize: parseInt(response.pageSize) || 10,
+        totalPages: Math.ceil(result.total / (parseInt(response.pageSize) || 10))
+      };
+    }
   } else if (Array.isArray(response)) {
     // 情况2: 响应直接是一个数组
     result.cases = response;
@@ -311,12 +316,17 @@ export const handleApiResponse = (response) => {
     // 情况3: 响应是一个对象，可能包含其他字段
     result.cases = ensureArray(response.items || response.cases);
     result.total = response.total || response.pagination?.total || result.cases.length;
-    result.pagination = response.pagination || {
-      total: result.total,
-      page: 1,
-      pageSize: 10,
-      totalPages: Math.ceil(result.total / 10)
-    };
+    // 优先使用response.pagination，否则从顶层字段构建pagination
+    if (response.pagination) {
+      result.pagination = response.pagination;
+    } else {
+      result.pagination = {
+        total: result.total,
+        page: parseInt(response.page) || 1,
+        pageSize: parseInt(response.pageSize) || 10,
+        totalPages: Math.ceil(result.total / (parseInt(response.pageSize) || 10))
+      };
+    }
   }
   
   return result;

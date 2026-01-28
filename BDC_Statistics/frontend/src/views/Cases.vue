@@ -294,7 +294,7 @@ const loadCases = debounce(async () => {
   try {
     const params = {
       page: pagination.page,
-      pageSize: pagination.pageSize
+      limit: pagination.pageSize
     }
     
     if (filterForm.dateRange && filterForm.dateRange.length === 2) {
@@ -316,7 +316,8 @@ const loadCases = debounce(async () => {
     cases.value = processedResponse.cases
     pagination.total = processedResponse.total
     pagination.page = processedResponse.pagination.page
-    pagination.pageSize = processedResponse.pagination.pageSize
+    // 保持pageSize不变，因为pageSize是用户在前端选择的，应该以用户选择为准
+    // pagination.pageSize = processedResponse.pagination.pageSize
     
   } catch (error) {
     console.error('加载收件记录失败:', error)
