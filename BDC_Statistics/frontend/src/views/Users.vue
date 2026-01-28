@@ -294,10 +294,8 @@ const getRoleType = (value) => {
 
 const loadUsers = async () => {
   try {
-    console.log('开始加载用户列表...')
     loading.value = true
     const response = await userAPI.getUsers()
-    console.log('获取用户列表响应:', response)
     
     // 注意：由于axios响应拦截器直接返回了response.data，所以这里直接访问response.users
     if (response && response.users) {
@@ -306,14 +304,10 @@ const loadUsers = async () => {
         ...user,
         name: user.real_name
       }))
-      console.log('用户列表加载成功，共', users.value.length, '条记录')
     } else {
-      console.warn('用户列表数据格式不正确:', response)
       ElMessage.warning('用户列表数据格式异常')
     }
   } catch (error) {
-    console.error('获取用户列表失败:', error)
-    console.error('错误详情:', error.response || error.message)
     // 显示更详细的错误信息
     const errorMsg = error.response && error.response.data ? 
       `获取用户列表失败: ${error.response.data.error || error.response.data.message || '未知错误'}` : 
@@ -395,11 +389,14 @@ const resetDeleteDialog = () => {
 
 const submitForm = async () => {
   try {
-    console.log('开始提交表单...')
-    console.log('当前userForm状态:', userForm)
-    
+    // 直接验证表单
+    if (!userFormRef.value) return
     await userFormRef.value.validate()
-    console.log('表单验证通过')
+    
+    // 确保status字段有值
+    if (!userForm.status) {
+      userForm.status = '正常'
+    }
     
     submitting.value = true
     
@@ -410,32 +407,36 @@ const submitForm = async () => {
       status: userForm.status
     }
     
-    console.log('提交的数据:', formData)
-    
     if (!isEditMode.value) {
       formData.password = userForm.password
-      console.log('添加新用户')
       await userAPI.addUser(formData)
       ElMessage.success('用户添加成功')
+      // 重新加载用户列表
+      await loadUsers()
     } else {
-      console.log('更新用户，用户ID:', userForm.id)
       await userAPI.updateUser(userForm.id, formData)
       ElMessage.success('用户更新成功')
+      
+      // 直接更新前端用户列表，让用户立即看到状态变化
+      const userIndex = users.value.findIndex(user => user.id === userForm.id)
+      if (userIndex !== -1) {
+        users.value[userIndex] = {
+          ...users.value[userIndex],
+          status: userForm.status
+        }
+      }
+      
+      // 然后重新加载用户列表以确保数据一致性
+      await loadUsers()
     }
     
-    // 先刷新用户列表，然后再关闭对话框，确保用户可以立即看到更新后的状态
-    console.log('刷新用户列表...')
-    await loadUsers()
-    console.log('用户列表刷新完成')
-    
+    // 关闭对话框
     dialogVisible.value = false
-    console.log('对话框已关闭')
   } catch (error) {
     console.error('保存用户失败:', error)
     ElMessage.error('保存失败，请稍后重试')
   } finally {
     submitting.value = false
-    console.log('提交完成，submitting状态重置为false')
   }
 }
 
