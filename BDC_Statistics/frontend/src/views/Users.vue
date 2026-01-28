@@ -414,7 +414,7 @@ const submitForm = async () => {
     }
     
     dialogVisible.value = false
-    loadUsers()
+    await loadUsers()
   } catch (error) {
     console.error('保存用户失败:', error)
     ElMessage.error('保存失败，请稍后重试')
